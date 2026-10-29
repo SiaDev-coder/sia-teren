@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1b2733"/>
+  <!-- planșetă -->
+  <rect x="128" y="104" width="256" height="320" rx="28" fill="#f2b705"/>
+  <rect x="200" y="80" width="112" height="56" rx="18" fill="#e6edf3" stroke="#1b2733" stroke-width="12"/>
+  <!-- picătură de apă -->
+  <path d="M256 176 C256 176 196 248 196 292 a60 60 0 0 0 120 0 C316 248 256 176 256 176 Z" fill="#1b2733"/>
+  <!-- bifă -->
+  <path d="M226 294 l22 22 l42 -46" fill="none" stroke="#f2b705" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="168" y="372" width="176" height="18" rx="9" fill="#1b2733"/>
+</svg>
