@@ -86,3 +86,10 @@ export function isValidIsoDate(s: string): boolean {
   const dt = new Date(y, m - 1, d)
   return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
 }
+
+/** Acord numeral românesc: 1 fotografie, 2–19 fotografii, 20+ de fotografii. */
+export function roCount(n: number, one: string, many: string): string {
+  if (n === 1) return `1 ${one}`
+  const rest = n % 100
+  return n === 0 || (rest >= 1 && rest <= 19) ? `${n} ${many}` : `${n} de ${many}`
+}

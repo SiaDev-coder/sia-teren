@@ -155,7 +155,7 @@ export function FindingScreen({ id }: { id: string }) {
 }
 
 function FindingEditor({ initial, live }: { initial: Finding; live: Finding }) {
-  const save = useCallback((full: Finding) => saveFinding(full), [])
+  const save = useCallback((patch: Partial<Finding>, full: Finding) => saveFinding(patch, full), [])
   const { value, update, state, flush } = useAutosave<Finding>(initial, save)
   const v = value
   const overdue = isOverdue(live, isoDate())

@@ -175,6 +175,8 @@ export function NumberField(props: {
 }) {
   const [text, setText] = useState(roNumber(props.value))
   const [focused, setFocused] = useState(false)
+  const [warn, setWarn] = useState('')
+  const max = props.max ?? 1_000_000
   const shown = focused ? text : roNumber(props.value)
   return (
     <label className="field">
@@ -189,18 +191,32 @@ export function NumberField(props: {
           setText(roNumber(props.value))
           setFocused(true)
         }}
-        onBlur={() => setFocused(false)}
+        onBlur={() => {
+          setFocused(false)
+          setWarn('')
+        }}
         onChange={(e) => {
-          const raw = e.target.value
-          // numere întregi: doar cifre (fără separatori, ca „1.000” să nu fie citit greșit)
-          const pattern = props.integer ? /^\d*$/ : props.allowNegative ? /^-?\d*[,.]?\d*$/ : /^\d*[,.]?\d*$/
-          if (raw !== '' && !pattern.test(raw)) return
+          // virgula e separatorul zecimal: punctul tastat devine virgulă, ca „1.000” să nu fie înțeles greșit
+          const raw = e.target.value.replace('.', ',')
+          const pattern = props.integer ? /^\d*$/ : props.allowNegative ? /^-?\d*,?\d*$/ : /^\d*,?\d*$/
+          if (raw !== '' && !pattern.test(raw)) {
+            setWarn(props.integer ? 'Doar numere întregi (fără virgulă sau punct).' : 'Folosește doar cifre și virgula zecimală (ex. 12,5).')
+            return
+          }
           const n = parseRoNumber(raw)
-          if (n !== null && Math.abs(n) > (props.max ?? 1_000_000)) return
+          if (n !== null && Math.abs(n) > max) {
+            setWarn(`Valoarea maximă este ${max.toLocaleString('ro-RO')}.`)
+            return
+          }
           setText(raw)
           props.onChange(n)
         }}
       />
+      {warn && (
+        <small className="hint" role="alert" style={{ color: 'var(--danger)' }}>
+          {warn}
+        </small>
+      )}
     </label>
   )
 }

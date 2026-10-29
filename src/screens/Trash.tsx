@@ -3,7 +3,7 @@ import { db } from '../db/db'
 import { emptyTrash, hardDelete, restore, TRASH_DAYS, type TableName } from '../db/repo'
 import { Layout } from '../components/Layout'
 import { confirmDialog, toast, errorMessage } from '../components/ui'
-import { roDate, roDateTime } from '../lib/format'
+import { roCount, roDate, roDateTime } from '../lib/format'
 
 interface Item {
   table: TableName
@@ -86,7 +86,7 @@ export function TrashScreen() {
           onClick={async () => {
             if (await confirmDialog({ title: 'Golești coșul?', message: 'Toate elementele din Coș vor fi șterse definitiv.', confirmLabel: 'Golește coșul', danger: true })) {
               const n = await emptyTrash()
-              toast(`${n} elemente șterse definitiv.`)
+              toast(`${roCount(n, 'element șters', 'elemente șterse')} definitiv.`)
             }
           }}
         >

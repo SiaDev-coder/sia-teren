@@ -5,7 +5,7 @@ import { activeProjects } from '../db/repo'
 import { Layout } from '../components/Layout'
 import { SelectField, TextField, toast, errorMessage } from '../components/ui'
 import { IconDownload, IconPdf } from '../components/icons'
-import { addDays, isoDate, roDate } from '../lib/format'
+import { addDays, isoDate, roCount, roDate } from '../lib/format'
 import { reportsCsv } from '../lib/csv'
 import { shareOrDownload, safeFilename } from '../lib/share'
 import { navigate } from '../router'
@@ -94,7 +94,7 @@ export function ExportScreen({ projectId }: { projectId?: string }) {
                 const { photosZip } = await import('../lib/photoZip')
                 const { blob, filename, count: n } = await photosZip(pid, from, to)
                 const r = await shareOrDownload(blob, filename, 'Fotografii șantier')
-                if (r === 'downloaded') toast(`${n} fotografii descărcate (.zip).`, 'ok')
+                if (r === 'downloaded') toast(`${roCount(n, 'fotografie descărcată', 'fotografii descărcate')} (.zip).`, 'ok')
               } catch (e) {
                 toast(errorMessage(e), 'error')
               } finally {

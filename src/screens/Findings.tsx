@@ -7,7 +7,7 @@ import { Layout } from '../components/Layout'
 import { IconChevron, IconPdf, IconPlus, IconDownload } from '../components/icons'
 import { SelectField, toast, errorMessage } from '../components/ui'
 import { navigate, useQuery } from '../router'
-import { isoDate, roDate } from '../lib/format'
+import { isoDate, roCount, roDate } from '../lib/format'
 import { isOverdue } from '../lib/findings'
 import { shareOrDownload, safeFilename } from '../lib/share'
 import { findingsCsv } from '../lib/csv'
@@ -121,7 +121,7 @@ export function FindingsList({ projectId }: { projectId: string }) {
       {overdueCount > 0 && (
         <div className="banner danger" role="alert">
           <span className="grow">
-            <strong>{overdueCount}</strong> {overdueCount === 1 ? 'constatare are termenul depășit' : 'constatări au termenul depășit'}.
+            <strong>{roCount(overdueCount, 'constatare', 'constatări')}</strong> {overdueCount === 1 ? 'are' : 'au'} termenul depășit.
           </span>
           {!overdueOnly && (
             <button className="btn danger" onClick={() => setOverdueOnly(true)}>

@@ -13,7 +13,6 @@ import { IconBack, IconCamera, IconCheck, IconChevron, IconCopy, IconLock, IconM
 import { addDays, isoDate, roLongDate } from '../lib/format'
 import { navigate } from '../router'
 import { isValidIsoDate } from '../lib/format'
-import { ReportExistsError } from '../db/repo'
 import { shareOrDownload } from '../lib/share'
 import { newId } from '../lib/ids'
 
@@ -75,18 +74,7 @@ export function ReportScreen({ projectId, date }: { projectId: string; date: str
 }
 
 function ReportEditor({ initial, projectName }: { initial: DailyReport; projectName: string }) {
-  const save = useCallback(async (full: DailyReport) => {
-    try {
-      await saveReport(full)
-    } catch (e) {
-      if (e instanceof ReportExistsError) {
-        // raportul zilei a fost creat între timp (ex. în altă fereastră): îl deschidem pe acela
-        navigate(`/proiect/${full.projectId}/raport/${full.date}?r=${Date.now()}`, { replace: true })
-        throw new Error('Raportul acestei zile exista deja; s-a deschis cel salvat.', { cause: e })
-      }
-      throw e
-    }
-  }, [])
+  const save = useCallback((patch: Partial<DailyReport>, full: DailyReport) => saveReport(patch, full), [])
   const { value, update, flush, saveNow, state, setValue, current } = useAutosave<DailyReport>(initial, save)
   /** Raportul trebuie să existe în baza de date înainte de fotografii, note vocale, PDF sau finalizare. */
   const ensureSaved = async () => {

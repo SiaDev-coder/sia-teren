@@ -4,7 +4,7 @@ import { addPhoto, photosFor, setAnnotations, softDelete, updatePhoto } from '..
 import type { OwnerType, Photo, PhotoRole } from '../db/types'
 import { processPhoto, drawAnnotations } from '../lib/photo'
 import { getPosition } from '../lib/gps'
-import { formatCoords, roDateTime } from '../lib/format'
+import { formatCoords, roCount, roDateTime } from '../lib/format'
 import { useObjectUrl } from './useObjectUrl'
 import { Annotator } from './Annotator'
 import { Sheet, confirmDialog, toast, errorMessage } from './ui'
@@ -70,7 +70,7 @@ export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function Photo
       }
       setBusy((b) => b - 1)
     }
-    if (ids.length) toast(ids.length === 1 ? 'Fotografie salvată.' : `${ids.length} fotografii salvate.`, 'ok')
+    if (ids.length) toast(ids.length === 1 ? 'Fotografie salvată.' : `${roCount(ids.length, 'fotografie salvată', 'fotografii salvate')}.`, 'ok')
     if (failed && !ids.length) return
     // GPS în fundal, dacă e permis: fotografia e deja salvată, coordonatele se adaugă când sosesc.
     if (ids.length && (await geolocationAllowed())) {
@@ -93,7 +93,7 @@ export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function Photo
       ) : (
         <p className="muted small">Nicio fotografie încă.</p>
       )}
-      {busy > 0 && <p className="muted small">Se procesează {busy} fotografii…</p>}
+      {busy > 0 && <p className="muted small">Se procesează: {roCount(busy, 'fotografie', 'fotografii')}…</p>}
       {!disabled && (
         <div className="photo-actions">
           <button type="button" className="btn primary" onClick={() => camRef.current?.click()}>

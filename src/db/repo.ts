@@ -135,28 +135,34 @@ export async function getOrCreateReport(projectId: string, date: string = isoDat
   return r.r
 }
 
-export class ReportExistsError extends Error {
-  constructor(public existing: DailyReport) {
-    super('Există deja un raport pentru această zi.')
-  }
-}
-
 /**
- * Salvează raportul complet (folosit de salvarea automată). Prima scriere creează raportul,
- * verificând unicitatea datei; un raport finalizat nu poate fi suprascris.
+ * Salvarea automată a raportului: scrie doar câmpurile modificate peste versiunea din baza de date
+ * (două ferestre deschise nu își șterg una alteia modificările). Prima scriere creează raportul;
+ * dacă între timp ziua a fost creată în altă fereastră, modificarea se combină în acela, care este întors.
+ * Un raport finalizat nu poate fi modificat.
  */
-export async function saveReport(r: DailyReport): Promise<void> {
-  await db.transaction('rw', db.reports, async () => {
-    const cur = await db.reports.get(r.id)
-    if (!cur) {
-      const other = await findReport(r.projectId, r.date)
-      if (other) throw new ReportExistsError(other)
-    } else if (cur.status === 'final') {
-      throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
+export async function saveReport(patch: Partial<DailyReport>, full: DailyReport): Promise<DailyReport | void> {
+  const { id: _i, status: _s, finalizedAt: _f, deletedAt: _d, createdAt: _c, projectId: _p, date: _dt, ...fields } = patch
+  void [_i, _s, _f, _d, _c, _p, _dt]
+  const adopted = await db.transaction('rw', db.reports, async () => {
+    const cur = await db.reports.get(full.id)
+    if (cur) {
+      if (cur.status === 'final') throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
+      await db.reports.put({ ...cur, ...fields, updatedAt: Date.now() })
+      return undefined
     }
-    await db.reports.put({ ...r, status: cur?.status ?? 'draft', finalizedAt: cur?.finalizedAt ?? null, deletedAt: cur?.deletedAt ?? null, updatedAt: Date.now() })
+    const other = await findReport(full.projectId, full.date)
+    if (other) {
+      if (other.status === 'final') throw new Error('Raportul acestei zile a fost finalizat între timp. Redeschide-l pentru modificări.')
+      const merged = { ...other, ...fields, updatedAt: Date.now() }
+      await db.reports.put(merged)
+      return merged
+    }
+    await db.reports.put({ ...full, status: 'draft', finalizedAt: null, deletedAt: null, updatedAt: Date.now() })
+    return undefined
   })
   markChanged()
+  return adopted
 }
 
 export async function updateReport(id: string, patch: Partial<DailyReport>): Promise<void> {
@@ -226,19 +232,14 @@ export async function updateFinding(id: string, patch: Partial<FindingInput>): P
  * Salvarea automată a unei constatări: scrie câmpurile editabile; starea, istoricul și ștergerea
  * rămân cele din baza de date. Un titlu golit nu se salvează (titlul e obligatoriu).
  */
-export async function saveFinding(f: Finding): Promise<void> {
+export async function saveFinding(patch: Partial<Finding>, f: Pick<Finding, 'id'>): Promise<void> {
+  const { id: _i, status: _s, history: _h, deletedAt: _d, createdAt: _c, projectId: _p, ...fields } = patch
+  void [_i, _s, _h, _d, _c, _p]
+  if (fields.title !== undefined && !fields.title.trim()) delete fields.title
   await db.transaction('rw', db.findings, async () => {
     const cur = await db.findings.get(f.id)
     if (!cur) throw new Error('Constatarea nu mai există.')
-    await db.findings.put({
-      ...f,
-      title: f.title.trim() ? f.title : cur.title,
-      status: cur.status,
-      history: cur.history,
-      deletedAt: cur.deletedAt,
-      createdAt: cur.createdAt,
-      updatedAt: Date.now(),
-    })
+    await db.findings.put({ ...cur, ...fields, updatedAt: Date.now() })
   })
   markChanged()
 }

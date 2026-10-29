@@ -4,11 +4,13 @@ import { toast, errorMessage } from './ui'
 export type SaveState = 'saved' | 'saving' | 'error'
 
 /**
- * Salvare automată imediată: la fiecare modificare se scrie în IndexedDB înregistrarea completă,
+ * Salvare automată imediată: la fiecare modificare se scriu în IndexedDB câmpurile schimbate,
  * în același moment (fără așteptare), ca nimic să nu se piardă la închidere, apel sau reîncărcare.
- * IndexedDB păstrează ordinea scrierilor pe același tabel, deci ultima valoare câștigă.
+ * IndexedDB păstrează ordinea scrierilor pe același tabel. Dacă salvarea întoarce o înregistrare
+ * (ex. raportul zilei creat între timp în altă fereastră, în care s-a combinat modificarea),
+ * editorul continuă cu aceea.
  */
-export function useAutosave<T extends object>(initial: T, save: (full: T) => Promise<void>) {
+export function useAutosave<T extends object>(initial: T, save: (patch: Partial<T>, full: T) => Promise<T | void>) {
   const [value, setValueState] = useState<T>(initial)
   const [state, setState] = useState<SaveState>('saved')
   const ref = useRef<T>(initial)
@@ -16,11 +18,15 @@ export function useAutosave<T extends object>(initial: T, save: (full: T) => Pro
   const last = useRef<Promise<void>>(Promise.resolve())
 
   const write = useCallback(
-    (full: T) => {
+    (patch: Partial<T>, full: T) => {
       inFlight.current++
       setState('saving')
-      const p = save(full).then(
-        () => {
+      const p = save(patch, full).then(
+        (adopted) => {
+          if (adopted) {
+            ref.current = { ...ref.current, ...adopted }
+            setValueState(ref.current)
+          }
           inFlight.current--
           if (inFlight.current === 0) setState('saved')
         },
@@ -40,7 +46,7 @@ export function useAutosave<T extends object>(initial: T, save: (full: T) => Pro
     (patch: Partial<T>) => {
       ref.current = { ...ref.current, ...patch }
       setValueState(ref.current)
-      void write(ref.current)
+      void write(patch, ref.current)
     },
     [write],
   )
@@ -57,7 +63,7 @@ export function useAutosave<T extends object>(initial: T, save: (full: T) => Pro
   }, [])
 
   /** Scrie valoarea curentă chiar dacă nu s-a modificat nimic (ex. ca raportul să existe înainte de o fotografie). */
-  const saveNow = useCallback(() => write(ref.current), [write])
+  const saveNow = useCallback(() => write({}, ref.current), [write])
 
   return { value, setValue, update, flush, saveNow, state, current: ref }
 }

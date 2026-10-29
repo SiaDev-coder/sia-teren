@@ -12,7 +12,6 @@ import {
   copyFromPrevious,
   saveReport,
   emptyReport,
-  ReportExistsError,
   createFinding,
   saveFinding,
   changeFindingStatus,
@@ -49,11 +48,26 @@ describe('regresii din verificarea independentă', () => {
     const p = await createProject({ ...P, name: 'P' })
     const r = emptyReport(p.id, '2026-10-29')
     expect(await db.reports.count()).toBe(0)
-    await saveReport({ ...r, notes: 'prima scriere' })
+    await saveReport({ notes: 'prima scriere' }, { ...r, notes: 'prima scriere' })
     expect((await db.reports.get(r.id))!.notes).toBe('prima scriere')
+    // R-01: a doua fereastră pe aceeași zi încă necompletată → modificarea se combină în raportul existent
     const alt = emptyReport(p.id, '2026-10-29')
-    await expect(saveReport({ ...alt, notes: 'x' })).rejects.toBeInstanceOf(ReportExistsError)
+    const adopted = await saveReport({ visits: 'vizită ISU' }, { ...alt, visits: 'vizită ISU' })
+    expect(adopted && adopted.id).toBe(r.id)
     expect(await db.reports.count()).toBe(1)
+    const cur = (await db.reports.get(r.id))!
+    expect(cur.notes).toBe('prima scriere')
+    expect(cur.visits).toBe('vizită ISU')
+  })
+
+  it('R-02: două ferestre pe același raport nu își șterg una alteia câmpurile', async () => {
+    const p = await createProject({ ...P, name: 'P' })
+    const r = await getOrCreateReport(p.id, '2026-10-29')
+    await saveReport({ notes: 'A' }, { ...r, notes: 'A' })
+    await saveReport({ safety: 'B' }, { ...r, safety: 'B' }) // fereastra B are încă notes=''
+    const cur = (await db.reports.get(r.id))!
+    expect(cur.notes).toBe('A')
+    expect(cur.safety).toBe('B')
   })
 
   it('V-10: raportul finalizat nu primește fotografii, nu e suprascris de salvarea automată și nu recuperează fotografii', async () => {
@@ -63,7 +77,7 @@ describe('regresii din verificarea independentă', () => {
     await softDelete('photos', ph.id)
     await finalizeReport(r.id)
     await expect(addPhoto({ projectId: p.id, ownerType: 'report', ownerId: r.id, role: 'general', blob: jpeg(), width: 1, height: 1, takenAt: 1, gps: null })).rejects.toThrow(/finalizat/)
-    await expect(saveReport({ ...r, notes: 'tab vechi' })).rejects.toThrow(/finalizat/)
+    await expect(saveReport({ notes: 'tab vechi' }, { ...r, notes: 'tab vechi' })).rejects.toThrow(/finalizat/)
     await expect(restore('photos', ph.id)).rejects.toBeInstanceOf(RestoreConflictError)
     expect((await db.reports.get(r.id))!.status).toBe('final')
   })
@@ -80,7 +94,7 @@ describe('regresii din verificarea independentă', () => {
     const p = await createProject({ ...P, name: 'P' })
     const f = await createFinding(p.id, { title: 'Titlu bun', description: '', category: 'calitate', severity: 'minoră', location: '', gps: null, responsible: '', dueDate: '' })
     await changeFindingStatus(f.id, 'În lucru')
-    await saveFinding({ ...f, title: '   ', description: 'nou' }) // f are starea veche „Deschisă”
+    await saveFinding({ title: '   ', description: 'nou', status: 'Deschisă' }, f) // starea veche nu se scrie
     const cur = (await db.findings.get(f.id))!
     expect(cur.title).toBe('Titlu bun')
     expect(cur.description).toBe('nou')

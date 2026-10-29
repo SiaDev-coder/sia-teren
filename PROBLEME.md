@@ -28,3 +28,9 @@ Format: problemă — cauză — rezolvare.
 - **V-19** — export „Fotografii .zip” cu adnotări + banda de text arse în imagine (Rapoarte PDF și CSV).
 - **V-22** — textul transcris se poate insera în toate câmpurile text ale raportului (inclusiv rândurile de activități, materiale, utilaje, personal) și ale constatării.
 - **V-09 (E2E 6), V-20 (Zlib, ORT dev), V-21 (ArrayBuffer), V-23 (format dată în Chromium headless)** — explicate în DECIZII / raportul final; V-09 depinde de accesul la huggingface.co.
+
+## Verificarea independentă — runda 2
+- **R-01 (majoră) două ferestre pe aceeași zi necompletată** — a doua fereastră nu mai putea salva. Salvarea automată scrie acum doar câmpurile modificate peste versiunea din baza de date; dacă ziua a fost creată între timp, modificarea se combină în raportul existent, iar editorul continuă cu acela. Test E2E + unitar.
+- **R-02 (minoră) suprascriere între ferestre** — rezolvat de aceeași schimbare (scriere pe câmpuri). Test unitar.
+- **R-03 acord numeral** — „1 fotografie”, „20 de fotografii” (funcția `roCount`), aplicat și la Coș și la constatările depășite.
+- **V-11 (rest)** — în câmpurile zecimale punctul tastat devine virgulă (se vede imediat că e zecimal); în câmpurile întregi și la depășirea limitei apare un mesaj explicit. Test E2E.

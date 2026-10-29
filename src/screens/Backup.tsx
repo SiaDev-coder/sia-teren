@@ -5,7 +5,7 @@ import { confirmDialog, toast, errorMessage } from '../components/ui'
 import { IconDownload, IconShare } from '../components/icons'
 import { createBackup, markBackupDone, parseBackup, restoreBackup, type ParsedBackup, type RestoreMode } from '../lib/backup'
 import { shareOrDownload, download } from '../lib/share'
-import { roDateTime } from '../lib/format'
+import { roCount, roDateTime } from '../lib/format'
 
 export function BackupScreen() {
   const s = useSettings()
@@ -52,7 +52,7 @@ export function BackupScreen() {
       const r = await restoreBackup(parsed, mode)
       setParsed(null)
       toast(
-        mode === 'replace' ? `Restaurare completă: ${r.added} elemente.` : `Restaurare: ${r.added} adăugate, ${r.updated} actualizate, ${r.skipped} neschimbate.`,
+        mode === 'replace' ? `Restaurare completă: ${roCount(r.added, 'element', 'elemente')}.` : `Restaurare: adăugate ${r.added}, actualizate ${r.updated}, neschimbate ${r.skipped}.`,
         'ok',
         6000,
       )
