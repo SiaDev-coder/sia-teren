@@ -66,9 +66,9 @@ Lista arată întâi constatările cu **termen depășit** (cu roșu). Din **Fil
 
 ![Lista de constatări](docs/capturi/11-lista-constatari.png)
 
-## 8. Rapoarte pe perioadă și Excel
+## 8. Rapoarte pe perioadă, Excel și fotografii
 
-**Mai mult → Rapoarte PDF și CSV** (sau „PDF / CSV” din pagina proiectului): alegi intervalul și scoți **PDF raport pe perioadă** sau **CSV rapoarte zilnice** pentru Excel.
+**Mai mult → Rapoarte PDF și CSV** (sau „PDF / CSV” din pagina proiectului): alegi intervalul și scoți **PDF raport pe perioadă**, **CSV rapoarte zilnice** pentru Excel sau **Fotografii .zip** (cu data, GPS-ul și proiectul scrise pe imagine).
 
 ![Export](docs/capturi/16-export.png)
 

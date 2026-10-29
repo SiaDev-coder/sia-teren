@@ -10,7 +10,7 @@
 - **Fotografii** — direct din cameră sau din galerie; poți desena pe ele (săgeată, cerc, dreptunghi, linie, text). Originalul rămâne neatins. În PDF, fiecare fotografie primește jos o bandă cu data, ora, coordonatele GPS și proiectul.
 - **Note vocale** — înregistrezi sau atașezi un mesaj vocal; după ce descarci o dată „modelul vocal”, telefonul le **transformă în text în română, fără internet**. Textul îl pui cu o atingere în orice câmp.
 - **PDF** — raport zilnic, raport pe perioadă și listă de constatări, cu logo-ul și datele firmei, fotografii și căsuțe goale pentru semnătură și ștampilă (Întocmit / Verificat / Supervizor – Diriginte). Le trimiți pe WhatsApp, e-mail sau Drive.
-- **Excel (CSV)** — rapoarte și constatări, cu diacritice corecte, deschise direct în Excel cu setări românești.
+- **Excel (CSV)** — rapoarte și constatări, cu diacritice corecte, deschise direct în Excel cu setări românești. Plus **fotografii .zip** cu data, GPS-ul și proiectul scrise pe imagine.
 
 ## Instalare pe telefon
 
