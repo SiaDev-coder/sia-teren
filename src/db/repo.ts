@@ -275,9 +275,9 @@ export interface NewPhoto {
 
 /** Fotografiile și notele vocale nu se mai pot adăuga într-un raport finalizat. */
 async function assertOwnerEditable(ownerType: OwnerType, ownerId: string): Promise<void> {
-  if (ownerType !== 'report') return
-  const r = await db.reports.get(ownerId)
-  if (r?.status === 'final') throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
+  const owner = ownerType === 'report' ? await db.reports.get(ownerId) : await db.findings.get(ownerId)
+  if (!owner || owner.deletedAt !== null) throw new Error(`${ownerType === 'report' ? 'Raportul' : 'Constatarea'} nu mai există. Reîncarcă ecranul.`)
+  if (ownerType === 'report' && (owner as DailyReport).status === 'final') throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
 }
 
 export async function addPhoto(p: NewPhoto): Promise<Photo> {

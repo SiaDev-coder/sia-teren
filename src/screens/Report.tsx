@@ -77,9 +77,11 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
   const save = useCallback((patch: Partial<DailyReport>, full: DailyReport) => saveReport(patch, full), [])
   const { value, update, flush, saveNow, state, setValue, current } = useAutosave<DailyReport>(initial, save)
   /** Raportul trebuie să existe în baza de date înainte de fotografii, note vocale, PDF sau finalizare. */
-  const ensureSaved = async () => {
+  const ensureSaved = async (): Promise<string> => {
     await flush()
     if (!(await db.reports.get(current.current.id))) await saveNow()
+    // după salvare, raportul poate fi cel creat între timp în altă fereastră (alt id)
+    return current.current.id
   }
   const photoRef = useRef<PhotoSectionHandle>(null)
   const [pdfBusy, setPdfBusy] = useState(false)
@@ -123,9 +125,9 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
   const makePdf = async () => {
     setPdfBusy(true)
     try {
-      await ensureSaved()
+      const reportId = await ensureSaved()
       const { dailyReportPdf } = await import('../lib/pdf')
-      const { blob, filename } = await dailyReportPdf(r.id)
+      const { blob, filename } = await dailyReportPdf(reportId)
       const res = await shareOrDownload(blob, filename, `Raport zilnic ${projectName}`)
       if (res === 'downloaded') toast('PDF-ul a fost descărcat.', 'ok')
     } catch (e) {
@@ -234,7 +236,7 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
               </div>
             )}
           />
-          {!locked && <CopyPrevious reportId={r.id} onCopied={async () => setValue((await db.reports.get(r.id)) ?? r)} flush={ensureSaved} />}
+          {!locked && <CopyPrevious ensureSaved={ensureSaved} onCopied={async (id) => setValue((await db.reports.get(id)) ?? r)} />}
         </Section>
 
         <Section title="Utilaje" count={r.equipment.length}>
@@ -339,7 +341,7 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
           <button
             className="btn primary big block"
             onClick={async () => {
-              await ensureSaved()
+              const reportId = await ensureSaved()
               if (
                 !(await confirmDialog({
                   title: 'Finalizezi raportul?',
@@ -348,8 +350,8 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
                 }))
               )
                 return
-              await finalizeReport(r.id)
-              setValue({ ...r, status: 'final', finalizedAt: Date.now() })
+              await finalizeReport(reportId)
+              setValue({ ...((await db.reports.get(reportId)) ?? r), status: 'final' })
               toast('Raport finalizat.', 'ok')
             }}
           >
@@ -380,14 +382,14 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
   )
 }
 
-function CopyPrevious({ reportId, onCopied, flush }: { reportId: string; onCopied: () => void; flush: () => Promise<void> }) {
+function CopyPrevious({ ensureSaved, onCopied }: { ensureSaved: () => Promise<string>; onCopied: (id: string) => void }) {
   return (
     <button
       type="button"
       className="btn block"
       style={{ marginTop: 8 }}
       onClick={async () => {
-        await flush()
+        const reportId = await ensureSaved()
         const r = await db.reports.get(reportId)
         if (r && (r.personnel.length || r.equipment.length)) {
           const ok = await confirmDialog({
@@ -400,7 +402,7 @@ function CopyPrevious({ reportId, onCopied, flush }: { reportId: string; onCopie
         const done = await copyFromPrevious(reportId)
         if (!done) toast('Nu există un raport anterior în acest proiect.', 'error')
         else {
-          onCopied()
+          onCopied(reportId)
           toast('Personalul și utilajele au fost copiate din ziua precedentă.', 'ok')
         }
       }}

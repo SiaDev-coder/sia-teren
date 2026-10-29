@@ -31,7 +31,7 @@ interface Props {
   disabled?: boolean
   label?: string
   /** apelat înainte de prima fotografie (ex. ca raportul să fie salvat) */
-  beforeAdd?: () => Promise<void>
+  beforeAdd?: () => Promise<string | void>
 }
 
 export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function PhotoSection(
@@ -50,8 +50,9 @@ export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function Photo
   const onFiles = async (files: FileList | null) => {
     if (!files || !files.length) return
     const list = Array.from(files)
+    let owner: string
     try {
-      await beforeAdd?.()
+      owner = (await beforeAdd?.()) || ownerId
     } catch (e) {
       toast(errorMessage(e), 'error')
       return
@@ -62,7 +63,7 @@ export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function Photo
     for (const f of list) {
       try {
         const img = await processPhoto(f)
-        const p = await addPhoto({ projectId, ownerType, ownerId, role, ...img, takenAt: Date.now(), gps: null })
+        const p = await addPhoto({ projectId, ownerType, ownerId: owner, role, ...img, takenAt: Date.now(), gps: null })
         ids.push(p.id)
       } catch (e) {
         failed++

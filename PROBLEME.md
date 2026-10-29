@@ -34,3 +34,8 @@ Format: problemă — cauză — rezolvare.
 - **R-02 (minoră) suprascriere între ferestre** — rezolvat de aceeași schimbare (scriere pe câmpuri). Test unitar.
 - **R-03 acord numeral** — „1 fotografie”, „20 de fotografii” (funcția `roCount`), aplicat și la Coș și la constatările depășite.
 - **V-11 (rest)** — în câmpurile zecimale punctul tastat devine virgulă (se vede imediat că e zecimal); în câmpurile întregi și la depășirea limitei apare un mesaj explicit. Test E2E.
+
+## Verificarea independentă — runda 3
+- **R-04 (majoră) fotografie/notă orfană în a doua fereastră** — acțiunile (fotografie, notă vocală, PDF, finalizare, copiere) folosesc id-ul efectiv al raportului întors după salvare; adăugarea refuză un raport/constatare inexistentă. Test E2E cu două ferestre.
+- **R-05 (minoră) prima apăsare eșua în a doua fereastră** — rezolvat de aceeași schimbare.
+- **R-06 (minoră, rămasă)** — listele de rânduri (personal, utilaje…) editate simultan în două ferestre: rămâne lista ultimei ferestre. Scenariu rar (aceeași zi deschisă în două ferestre în același timp); documentat ca limitare.

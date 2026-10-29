@@ -157,7 +157,9 @@ describe('regresii din verificarea independentă', () => {
 
   it('binarele sunt stocate ca ArrayBuffer în IndexedDB și citite înapoi ca Blob', async () => {
     const p = await createProject({ ...P, name: 'P' })
-    const ph = await addPhoto({ projectId: p.id, ownerType: 'finding', ownerId: 'f', role: 'before', blob: jpeg(), width: 1, height: 1, takenAt: 1, gps: null })
+    const f = await createFinding(p.id, { title: 'T', description: '', category: 'calitate', severity: 'minoră', location: '', gps: null, responsible: '', dueDate: '' })
+    await expect(addPhoto({ projectId: p.id, ownerType: 'report', ownerId: 'inexistent', role: 'general', blob: jpeg(), width: 1, height: 1, takenAt: 1, gps: null })).rejects.toThrow(/nu mai există/)
+    const ph = await addPhoto({ projectId: p.id, ownerType: 'finding', ownerId: f.id, role: 'before', blob: jpeg(), width: 1, height: 1, takenAt: 1, gps: null })
     const raw = await new Promise<{ blob: { __bin: number; buf: ArrayBuffer } }>((res) => {
       const req = indexedDB.open('sia-teren')
       req.onsuccess = () => {

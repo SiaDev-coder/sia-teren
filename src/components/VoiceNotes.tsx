@@ -21,7 +21,7 @@ interface Props {
   disabled?: boolean
   targets: InsertTarget[]
   /** apelat înainte de a salva o notă (ex. ca raportul să existe) */
-  beforeAdd?: () => Promise<void>
+  beforeAdd?: () => Promise<string | void>
 }
 
 const running = new Set<string>()
@@ -72,8 +72,8 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets, b
     })
     let note: AudioNote
     try {
-      await beforeAdd?.()
-      note = await addAudio({ projectId, ownerType, ownerId, blob: f, mimeType: f.type || 'audio/mp4', durationSec })
+      const owner = (await beforeAdd?.()) || ownerId
+      note = await addAudio({ projectId, ownerType, ownerId: owner, blob: f, mimeType: f.type || 'audio/mp4', durationSec })
     } catch (e) {
       toast(errorMessage(e), 'error')
       return
@@ -130,8 +130,8 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets, b
       }
       let note: AudioNote
       try {
-        await beforeAdd?.()
-        note = await addAudio({ projectId, ownerType, ownerId, blob, mimeType: type, durationSec: Math.round((Date.now() - started) / 100) / 10 })
+        const owner = (await beforeAdd?.()) || ownerId
+        note = await addAudio({ projectId, ownerType, ownerId: owner, blob, mimeType: type, durationSec: Math.round((Date.now() - started) / 100) / 10 })
       } catch (e) {
         toast(errorMessage(e), 'error')
         return
