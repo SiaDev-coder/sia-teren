@@ -71,7 +71,7 @@ test('E2E 5: copie de siguranță → ștergi tot → restaurare → date identi
   const fc2 = page.waitForEvent('filechooser')
   await page.getByRole('button', { name: 'Alege fișierul copiei…' }).click()
   await (await fc2).setFiles(zipPath)
-  await expect(page.getByTestId('restore-summary')).toContainText('1 proiecte, 1 rapoarte, 1 constatări, 3 fotografii')
+  await expect(page.getByTestId('restore-summary')).toContainText('1 proiect, 1 raport, 1 constatare, 3 fotografii')
   await page.getByRole('button', { name: 'Înlocuiește tot' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Înlocuiește tot' }).click()
   await expect(page.getByText(/Restaurare completă/)).toBeVisible()

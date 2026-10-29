@@ -117,7 +117,7 @@ export function BackupScreen() {
           <div className="stack" data-testid="restore-summary">
             <div className="banner info">
               <span className="grow">
-                Copie din {roDateTime(Date.parse(parsed.manifest.createdAt))}: {parsed.projects.length} proiecte, {parsed.reports.length} rapoarte, {parsed.findings.length} constatări, {parsed.photos.length} fotografii, {parsed.audio.length} note vocale.
+                Copie din {roDateTime(Date.parse(parsed.manifest.createdAt))}: {roCount(parsed.projects.length, 'proiect', 'proiecte')}, {roCount(parsed.reports.length, 'raport', 'rapoarte')}, {roCount(parsed.findings.length, 'constatare', 'constatări')}, {roCount(parsed.photos.length, 'fotografie', 'fotografii')}, {roCount(parsed.audio.length, 'notă vocală', 'note vocale')}.
               </span>
             </div>
             <button className="btn primary block" disabled={busy} onClick={() => restore('merge')}>
