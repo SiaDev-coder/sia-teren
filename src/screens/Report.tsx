@@ -200,7 +200,7 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
             itemLabel="Categoria"
             disabled={locked}
             render={(row, set) => (
-              <div className="grid2">
+              <div className="grid-wide">
                 <label className="field">
                   <span>Categorie</span>
                   <input type="text" list="categorii" value={row.category} onChange={(e) => set({ category: e.target.value })} />

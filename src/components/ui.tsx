@@ -13,7 +13,8 @@ const toastSubs = new Set<() => void>()
 let toastSeq = 0
 export function toast(text: string, kind: ToastKind = 'info', ms = kind === 'error' ? 6000 : 3000) {
   const id = ++toastSeq
-  toasts = [...toasts, { id, text, kind }]
+  // cel mult 2 mesaje vizibile: cele vechi dispar ca să nu acopere ecranul
+  toasts = [...toasts.slice(-1), { id, text, kind }]
   toastSubs.forEach((f) => f())
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id)

@@ -77,3 +77,9 @@ Consecință: descărcarea modelului Whisper (E2E 6) și deploy-ul Cloudflare nu
 - **„Verifică motorul de transcriere”** (Setări): decodează un ton WAV generat în memorie, îl reeșantionează la 16 kHz (`OfflineAudioContext`, același cod ca la transcriere) și rulează ONNX Runtime din binarul servit de aplicație pe un model ONNX de 67 de octeți (y = x + x). Prima rulare online pune motorul în cache-ul `sia-ort`; apoi merge offline. E o verificare reală pentru utilizator și dovada E2E că problema CDN-ului WASM este rezolvată.
 - **„Atașează fișier audio”**: pe lângă înregistrare, se pot atașa fișiere audio (ex. mesaje vocale WhatsApp); se transcriu la fel. Folosit și de E2E 6 (WebKit nu are microfon simulat din fișier).
 - **Fișier audio de test**: sintetizat local cu eSpeak NG (text propriu, CC0) — `tests/fixtures/ATRIBUIRE.md`.
+
+## Faza 8 — șlefuire și livrare
+- **Licența Zlib** (pako 1.0.11, dependență a pdf-lib, declarată „MIT AND Zlib”) — adăugată la lista permisă: este o licență permisivă aprobată OSI, de același tip cu cele enumerate (secțiunea 1 interzice doar copyleft/SSPL/BUSL/non-comercial). Alternativa (renunțarea la pdf-lib) ar fi însemnat rescrierea generatorului PDF fără câștig de licență real.
+- **Mesaje (toast)**: maximum 2 vizibile simultan — în capturi se vedea cum se adunau peste conținut.
+- **Editor foto**: bara de unelte pe două rânduri (unelte / culori + anulare) — pe ecrane de 412 px ieșea din ecran.
+- **Găzduire**: `wrangler.jsonc` (Workers Static Assets, `assets.directory = ./dist`), `_headers` (fără cache pentru `sw.js`/`index.html`, cache lung pentru `assets/` și `ort/`), `.assetsignore`. Rutare pe hash → nu e nevoie de `not_found_handling`. `npx wrangler deploy --dry-run` citește corect `dist/`.

@@ -17,7 +17,10 @@
     "predev": "node scripts/prepare-ort.mjs",
     "prebuild": "node scripts/prepare-ort.mjs",
     "pretypecheck": "node scripts/prepare-ort.mjs",
-    "prelint": "node scripts/prepare-ort.mjs"
+    "prelint": "node scripts/prepare-ort.mjs",
+    "budget": "node scripts/check-budget.mjs",
+    "release": "npm run build && npm run licenses && npm run build && npm run budget",
+    "deploy": "npm run release && wrangler deploy"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.2",

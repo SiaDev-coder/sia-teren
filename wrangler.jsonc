@@ -1,0 +1,11 @@
+// Cloudflare Workers Static Assets — doar fișiere statice, fără cod de server.
+// Rutarea aplicației e pe hash (#/...), deci nu e nevoie de fallback SPA.
+// Deploy: npm run release && npx wrangler deploy (cu CLOUDFLARE_API_TOKEN și CLOUDFLARE_ACCOUNT_ID în mediu).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sia-teren",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

@@ -117,26 +117,34 @@ export function Annotator({ photo, onSave, onCancel }: { photo: Photo; onSave: (
         />
       </div>
       <div className="toolbar" role="toolbar" aria-label="Unelte">
-        {TOOLS.map(({ tool: t, label, Icon }) => (
-          <button key={t} className="icon-btn" aria-label={label} title={label} aria-pressed={tool === t} onClick={() => setTool(t)}>
-            <Icon />
-          </button>
-        ))}
-        <span style={{ width: 8 }} />
-        {ANNOTATION_COLORS.map((c) => (
+        <div className="group">
+          {TOOLS.map(({ tool: t, label, Icon }) => (
+            <button key={t} className="icon-btn" aria-label={label} title={label} aria-pressed={tool === t} onClick={() => setTool(t)}>
+              <Icon />
+            </button>
+          ))}
+        </div>
+        <div className="group">
+          {ANNOTATION_COLORS.map((c) => (
+            <button
+              key={c.value}
+              className="swatch"
+              style={{ background: c.value }}
+              aria-label={`Culoare ${c.label}`}
+              aria-pressed={color === c.value}
+              onClick={() => setColor(c.value)}
+            />
+          ))}
           <button
-            key={c.value}
-            className="swatch"
-            style={{ background: c.value }}
-            aria-label={`Culoare ${c.label}`}
-            aria-pressed={color === c.value}
-            onClick={() => setColor(c.value)}
-          />
-        ))}
-        <span style={{ width: 8 }} />
-        <button className="icon-btn" aria-label="Anulează ultimul pas" title="Anulează pasul" disabled={!anns.length} onClick={() => setAnns((l) => l.slice(0, -1))}>
-          <IconUndo />
-        </button>
+            className="icon-btn"
+            aria-label="Anulează ultimul pas"
+            title="Anulează pasul"
+            disabled={!anns.length}
+            onClick={() => setAnns((l) => l.slice(0, -1))}
+          >
+            <IconUndo />
+          </button>
+        </div>
       </div>
       {textAt && (
         <Sheet title="Text pe fotografie" onClose={() => setTextAt(null)}>
