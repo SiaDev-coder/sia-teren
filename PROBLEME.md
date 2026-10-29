@@ -5,3 +5,7 @@ Format: problemă — cauză — rezolvare.
 1. **huggingface.co, api.cloudflare.com, *.workers.dev blocate** — politica de rețea a mediului cloud (proxy 403). — Nu am căutat ocolișuri. Codul pentru model vocal și deploy e complet; pasul de mediu îi revine lui Ionuț (vezi raportul final).
 2. **Varianta WASM pentru WebGPU depășește 25 MiB** (limita Cloudflare per fișier). — Livrare gzip + decompresie în worker (vezi DECIZII).
 3. **typescript 7 incompatibil cu typescript-eslint** — folosit TypeScript 6.0.3.
+4. **WebKit: „Error preparing Blob/File data to be stored in object store”** la salvarea logo-ului/fotografiilor — binarele se stochează ca ArrayBuffer (vezi DECIZII, Fazele 2–3).
+5. **Playwright WebKit + `setOffline(true)`**: reîncărcarea eșua („WebKit encountered an internal error”) deși service worker-ul era activ. Verificat manual: cu serverul oprit, WebKit încarcă aplicația din service worker. Testele offline opresc serverul (și pe Chromium folosesc și `setOffline`).
+6. **Ecranul Setări interoga huggingface.co la deschidere** (pentru mărimea modelului) — contravine regulii „singura cerere de rețea: descărcarea explicită”. Mutat în fluxul butonului „Descarcă”.
+7. **`waitForFunction` cu funcție async** întorcea imediat (Promise = valoare „adevărată”) → testul reîncărca înainte ca service worker-ul să fie activ. Înlocuit cu `navigator.serviceWorker.ready`.

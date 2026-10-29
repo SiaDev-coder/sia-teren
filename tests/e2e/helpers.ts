@@ -37,7 +37,12 @@ export async function expectSaved(page: Page) {
 
 /** Deschide o secțiune pliabilă după titlu. */
 export async function openSection(page: Page, title: string) {
-  const summary = page.locator('details.section > summary', { hasText: title }).first()
-  const details = summary.locator('..')
-  if (!(await details.evaluate((d) => (d as HTMLDetailsElement).open))) await summary.click()
+  const details = section(page, title)
+  if (!(await details.evaluate((d) => (d as HTMLDetailsElement).open))) await details.locator('summary').first().click()
+}
+
+/** Secțiunea pliabilă al cărei titlu începe cu textul dat. */
+export function section(page: Page, title: string) {
+  const esc = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return page.locator('details.section').filter({ has: page.locator('summary', { hasText: new RegExp(`^${esc}`) }) }).first()
 }

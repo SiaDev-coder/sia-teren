@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { AudioNote, DailyReport, Finding, Photo, Project, SettingRow } from './types'
+import { fromStored, isStored } from './binary'
 
 export const DB_NAME = 'sia-teren'
 /** Versiunea curentă a schemei (apare și în manifestul copiei de siguranță). */
@@ -49,6 +50,10 @@ export function openDb(name = DB_NAME): SiaDb {
           }
         })
     })
+  // binarele stocate ca ArrayBuffer revin în aplicație ca Blob (vezi binary.ts)
+  db.photos.hook('reading', (p: Photo) => (p && isStored(p.blob) ? { ...p, blob: fromStored(p.blob) } : p))
+  db.audio.hook('reading', (a: AudioNote) => (a && isStored(a.blob) ? { ...a, blob: fromStored(a.blob) } : a))
+  db.settings.hook('reading', (r: SettingRow) => (r && isStored(r.value) ? { ...r, value: fromStored(r.value) } : r))
   return db
 }
 

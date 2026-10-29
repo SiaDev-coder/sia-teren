@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db'
+import { toStored } from './binary'
 
 export type Theme = 'auto' | 'light' | 'dark'
 export type VoiceModelId = 'base' | 'small'
@@ -53,7 +54,7 @@ export async function getSetting<K extends keyof Settings>(key: K): Promise<Sett
 }
 
 export async function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void> {
-  await db.settings.put({ key, value })
+  await db.settings.put({ key, value: value instanceof Blob ? await toStored(value) : value })
 }
 
 export function useSettings(): Settings | undefined {

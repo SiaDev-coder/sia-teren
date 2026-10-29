@@ -3,6 +3,7 @@ import { db, SCHEMA_VERSION } from '../db/db'
 import { getSettings, setSetting, type Settings } from '../db/settings'
 import type { AudioNote, DailyReport, Finding, Photo, Project, BaseRecord } from '../db/types'
 import { extensionForMime } from './audio'
+import { toStored } from '../db/binary'
 
 export const BACKUP_APP = 'SIA Teren'
 
@@ -219,6 +220,12 @@ export interface RestoreResult {
 /** Restaurează o copie validată. Totul într-o singură tranzacție: ori reușește complet, ori nu schimbă nimic. */
 export async function restoreBackup(p: ParsedBackup, mode: RestoreMode): Promise<RestoreResult> {
   const res: RestoreResult = { added: 0, updated: 0, skipped: 0 }
+  // conversia binarelor se face înainte de tranzacție (operații asincrone în afara IndexedDB)
+  const photos = await Promise.all(p.photos.map(async (x) => ({ ...x, blob: (await toStored(x.blob)) as unknown as Blob })))
+  const audio = await Promise.all(p.audio.map(async (x) => ({ ...x, blob: (await toStored(x.blob)) as unknown as Blob })))
+  const settings: Record<string, unknown> = { ...p.settings }
+  if (p.settings.logo) settings.logo = await toStored(p.settings.logo)
+  p = { ...p, photos, audio }
   const tables = [db.projects, db.reports, db.findings, db.photos, db.audio, db.settings]
   await db.transaction('rw', tables, async () => {
     if (mode === 'replace') {
@@ -229,7 +236,7 @@ export async function restoreBackup(p: ParsedBackup, mode: RestoreMode): Promise
       await db.photos.bulkAdd(p.photos)
       await db.audio.bulkAdd(p.audio)
       res.added = p.projects.length + p.reports.length + p.findings.length + p.photos.length + p.audio.length
-      for (const [k, v] of Object.entries(p.settings)) await db.settings.put({ key: k, value: v })
+      for (const [k, v] of Object.entries(settings)) await db.settings.put({ key: k, value: v })
     } else {
       const merge = async <T extends BaseRecord>(table: import('dexie').Table<T, string>, items: T[]) => {
         for (const it of items) {

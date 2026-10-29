@@ -1,4 +1,5 @@
 import { db } from './db'
+import { toStored } from './binary'
 import { getSetting, setSetting } from './settings'
 import { newId } from '../lib/ids'
 import { isoDate } from '../lib/format'
@@ -217,7 +218,7 @@ export interface NewPhoto {
 
 export async function addPhoto(p: NewPhoto): Promise<Photo> {
   const photo: Photo = { ...base(), ...p, annotations: [], caption: '' }
-  await db.photos.add(photo)
+  await db.photos.add({ ...photo, blob: (await toStored(p.blob)) as unknown as Blob })
   await markChanged()
   return photo
 }
@@ -242,7 +243,7 @@ export async function addAudio(
   a: Pick<AudioNote, 'projectId' | 'ownerType' | 'ownerId' | 'blob' | 'mimeType' | 'durationSec'>,
 ): Promise<AudioNote> {
   const note: AudioNote = { ...base(), ...a, transcript: '', transcriptStatus: 'none', transcriptError: '' }
-  await db.audio.add(note)
+  await db.audio.add({ ...note, blob: (await toStored(a.blob)) as unknown as Blob })
   await markChanged()
   return note
 }

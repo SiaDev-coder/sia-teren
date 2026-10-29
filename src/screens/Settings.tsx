@@ -135,7 +135,6 @@ export function SettingsScreen() {
 function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready: AsrModel[] }) {
   const [device, setDevice] = useState<AsrDevice | null>(null)
   const [def, setDef] = useState<AsrModel>('base')
-  const [info, setInfo] = useState<Partial<Record<AsrModel, { bytes: number | null; error: string }>>>({})
   const [cached, setCached] = useState<Partial<Record<AsrModel, boolean>>>({})
   const [progress, setProgress] = useState<Progress | null>(null)
   const [busy, setBusy] = useState<AsrModel | null>(null)
@@ -149,25 +148,6 @@ function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready:
   useEffect(() => {
     for (const m of ready) void isModelCached(m).then((c) => setCached((x) => ({ ...x, [m]: c })))
   }, [ready])
-
-  const loadInfo = async (m: AsrModel) => {
-    if (!navigator.onLine) {
-      setInfo((x) => ({ ...x, [m]: { bytes: null, error: 'Fără internet: mărimea se poate afla doar online.' } }))
-      return
-    }
-    setInfo((x) => ({ ...x, [m]: { bytes: null, error: '' } }))
-    try {
-      const r = await modelInfo(m)
-      setInfo((x) => ({ ...x, [m]: { bytes: r.modelBytes + r.runtimeBytes, error: r.unknown ? 'mărime parțială' : '' } }))
-    } catch (e) {
-      setInfo((x) => ({ ...x, [m]: { bytes: null, error: errorMessage(e) } }))
-    }
-  }
-
-  useEffect(() => {
-    if (!ready.includes(current) && !info[current]) void loadInfo(current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, ready])
 
   return (
     <div className="stack">
@@ -186,7 +166,6 @@ function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready:
         .filter((m) => m === current || ready.includes(m))
         .map((m) => {
           const isReady = ready.includes(m)
-          const i = info[m]
           return (
             <div className="card" key={m} data-testid={`model-${m}`}>
               <div className="row">
@@ -194,8 +173,8 @@ function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready:
                 {isReady && <span className={`badge ${cached[m] === false ? 'danger' : 'ok'}`}>{cached[m] === false ? 'incomplet' : 'descărcat'}</span>}
               </div>
               {!isReady && (
-                <p className="small muted" data-testid={`model-size-${m}`}>
-                  Mărime de descărcat: {i?.bytes ? formatBytes(i.bytes) : i?.error ? '—' : 'se calculează…'} {i?.error && `(${i.error})`}
+                <p className="small muted">
+                  Descărcare unică, pe Wi-Fi de preferat. Mărimea exactă îți este arătată înainte să confirmi descărcarea.
                 </p>
               )}
               {busy === m && progress && (
@@ -217,8 +196,22 @@ function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready:
                         return
                       }
                       setBusy(m)
-                      setProgress({ loaded: 0, total: 1, phase: 'runtime' })
                       try {
+                        // mărimea reală, aflată de pe huggingface.co abia după apăsarea butonului
+                        const info = await modelInfo(m)
+                        const total = info.modelBytes + info.runtimeBytes
+                        const ok = await confirmDialog({
+                          title: 'Descarci modelul vocal?',
+                          message: (
+                            <p data-testid="model-size">
+                              {MODEL_LABELS[m]}: <strong>{formatBytes(total)}</strong>
+                              {info.unknown ? ' (unele fișiere fără mărime declarată)' : ''}. Descărcarea se face o singură dată; apoi transcrierea merge fără internet.
+                            </p>
+                          ),
+                          confirmLabel: 'Descarcă',
+                        })
+                        if (!ok) return
+                        setProgress({ loaded: 0, total: 1, phase: 'runtime' })
                         await downloadModel(m, setProgress)
                         await setSetting('voiceModel', m)
                         setCached((x) => ({ ...x, [m]: true }))
