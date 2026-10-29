@@ -1,3 +1,4 @@
+/* global window */
 // Capturi de ecran pentru GHID-UTILIZARE.md, pe build-ul de producție, profil mobil Pixel 7.
 // Datele introduse aici sunt doar exemple pentru ghid (nu există în aplicație).
 import { chromium, devices } from '@playwright/test'
