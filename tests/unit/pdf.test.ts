@@ -67,6 +67,13 @@ describe('PDF – diacritice', () => {
     }
   })
 
+  it('caracterele lipsă din font (săgeți, emoji) nu apar ca „?”', async () => {
+    const bytes = await buildDailyReportPdf(fonts, { companyName: 'Firma', userName: '', project }, { ...emptyReport('p1', '2026-10-29'), notes: 'Deschisă → În lucru ✓ 👷 gata' }, [])
+    const text = (await extractText(bytes)).join('\n')
+    expect(text).toContain('Deschisă -> În lucru v gata')
+    expect(text).not.toContain('?')
+  })
+
   it('constatare depășită: termen trecut și neînchisă', () => {
     expect(isOverdue({ dueDate: '2026-10-01', status: 'Deschisă' }, '2026-10-29')).toBe(true)
     expect(isOverdue({ dueDate: '2026-10-01', status: 'Verificată' }, '2026-10-29')).toBe(false)

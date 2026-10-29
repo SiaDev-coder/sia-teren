@@ -9,3 +9,4 @@ Format: problemă — cauză — rezolvare.
 5. **Playwright WebKit + `setOffline(true)`**: reîncărcarea eșua („WebKit encountered an internal error”) deși service worker-ul era activ. Verificat manual: cu serverul oprit, WebKit încarcă aplicația din service worker. Testele offline opresc serverul (și pe Chromium folosesc și `setOffline`).
 6. **Ecranul Setări interoga huggingface.co la deschidere** (pentru mărimea modelului) — contravine regulii „singura cerere de rețea: descărcarea explicită”. Mutat în fluxul butonului „Descarcă”.
 7. **`waitForFunction` cu funcție async** întorcea imediat (Promise = valoare „adevărată”) → testul reîncărca înainte ca service worker-ul să fie activ. Înlocuit cu `navigator.serviceWorker.ready`.
+8. **Săgeata „→” apărea ca „?” în PDF** — Noto Sans nu are glifa U+2192. Adăugată tabelă de înlocuitori (→ devine „->”, emoji eliminate) + test unitar.

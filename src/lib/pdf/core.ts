@@ -34,6 +34,18 @@ const MUTED = rgb(0.38, 0.42, 0.47)
 const LINE = rgb(0.75, 0.78, 0.82)
 const FILL = rgb(0.93, 0.95, 0.97)
 
+/** Înlocuitori pentru caractere pe care Noto Sans (subset Latin) nu le conține. */
+const FALLBACK: Record<string, string> = {
+  '→': '->',
+  '←': '<-',
+  '⇒': '=>',
+  '✓': 'v',
+  '✔': 'v',
+  '✗': 'x',
+  '•': '·',
+  '\u00a0': ' ',
+}
+
 class Writer {
   doc: PDFDocument
   regular!: PDFFont
@@ -71,12 +83,15 @@ class Writer {
     this.newPage()
   }
 
-  /** Înlocuiește caracterele pe care fontul nu le are (ex. emoji) ca să nu apară pătrățele. */
+  /** Înlocuiește caracterele pe care fontul nu le are (săgeți, emoji) ca să nu apară pătrățele. */
   clean(s: string): string {
     let out = ''
     for (const ch of s.replace(/\t/g, '    ')) {
       const cp = ch.codePointAt(0)!
-      out += cp === 10 || this.charset.has(cp) ? ch : '?'
+      if (cp === 10 || this.charset.has(cp)) out += ch
+      else if (FALLBACK[ch] !== undefined) out += [...FALLBACK[ch]].every((c) => this.charset.has(c.codePointAt(0)!)) ? FALLBACK[ch] : '?'
+      else if (cp >= 0x1f000 || (cp >= 0x2600 && cp <= 0x27bf) || (cp >= 0xfe00 && cp <= 0xfe0f) || cp === 0x200d) out += '' // emoji
+      else out += '?'
     }
     return out
   }
