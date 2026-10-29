@@ -85,6 +85,25 @@ export function ExportScreen({ projectId }: { projectId?: string }) {
           >
             <IconDownload /> CSV rapoarte zilnice (Excel)
           </button>
+          <button
+            className="btn block"
+            disabled={busy || !validRange || !pid}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                const { photosZip } = await import('../lib/photoZip')
+                const { blob, filename, count: n } = await photosZip(pid, from, to)
+                const r = await shareOrDownload(blob, filename, 'Fotografii șantier')
+                if (r === 'downloaded') toast(`${n} fotografii descărcate (.zip).`, 'ok')
+              } catch (e) {
+                toast(errorMessage(e), 'error')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            <IconDownload /> Fotografii .zip (cu dată, GPS și proiect pe imagine)
+          </button>
           <button className="btn block" disabled={!pid} onClick={() => navigate(`/proiect/${pid}/constatari`)}>
             Listă constatări (PDF / CSV, cu filtre)
           </button>

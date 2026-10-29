@@ -3,7 +3,7 @@ import { useSettings } from '../db/settings'
 import { Layout } from '../components/Layout'
 import { confirmDialog, toast, errorMessage } from '../components/ui'
 import { IconDownload, IconShare } from '../components/icons'
-import { createBackup, parseBackup, restoreBackup, type ParsedBackup, type RestoreMode } from '../lib/backup'
+import { createBackup, markBackupDone, parseBackup, restoreBackup, type ParsedBackup, type RestoreMode } from '../lib/backup'
 import { shareOrDownload, download } from '../lib/share'
 import { roDateTime } from '../lib/format'
 
@@ -20,9 +20,12 @@ export function BackupScreen() {
       const { blob, filename } = await createBackup(__APP_VERSION__)
       if (mode === 'download') {
         download(blob, filename)
+        await markBackupDone()
         toast('Copia de siguranță a fost descărcată.', 'ok')
       } else {
         const r = await shareOrDownload(blob, filename, 'Copie de siguranță SIA Teren')
+        // data ultimei copii se schimbă doar dacă fișierul a plecat efectiv (nu la anulare)
+        if (r !== 'cancelled') await markBackupDone()
         toast(r === 'downloaded' ? 'Copia de siguranță a fost descărcată.' : r === 'shared' ? 'Copia de siguranță a fost trimisă.' : 'Partajare anulată.', r === 'cancelled' ? 'info' : 'ok')
       }
     } catch (e) {

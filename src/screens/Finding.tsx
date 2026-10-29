@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { changeFindingStatus, createFinding, softDelete, updateFinding, type FindingInput } from '../db/repo'
+import { changeFindingStatus, createFinding, saveFinding, softDelete, type FindingInput } from '../db/repo'
 import { FINDING_CATEGORIES, FINDING_STATUSES, SEVERITIES, type Finding, type GpsFix } from '../db/types'
 import { Layout } from '../components/Layout'
 import { Section, SelectField, TextArea, TextField, confirmDialog, toast, errorMessage } from '../components/ui'
@@ -13,6 +13,7 @@ import { getPosition } from '../lib/gps'
 import { formatCoords, isoDate, roDateTime } from '../lib/format'
 import { isOverdue } from '../lib/findings'
 import { navigate } from '../router'
+import { useDraft } from '../components/useDraft'
 
 function GpsField({ gps, onChange, disabled }: { gps: GpsFix | null; onChange: (g: GpsFix | null) => void; disabled?: boolean }) {
   const [busy, setBusy] = useState(false)
@@ -58,10 +59,18 @@ function GpsField({ gps, onChange, disabled }: { gps: GpsFix | null; onChange: (
   )
 }
 
-function Fields({ v, set, disabled }: { v: FindingInput; set: (p: Partial<FindingInput>) => void; disabled?: boolean }) {
+function Fields({ v, set, disabled, editing }: { v: FindingInput; set: (p: Partial<FindingInput>) => void; disabled?: boolean; editing?: boolean }) {
   return (
     <>
-      <TextField label="Titlu" name="title" required value={v.title} onChange={(title) => set({ title })} disabled={disabled} />
+      <TextField
+        label="Titlu"
+        name="title"
+        required
+        value={v.title}
+        onChange={(title) => set({ title })}
+        disabled={disabled}
+        hint={!editing || v.title.trim() ? undefined : 'Titlul este obligatoriu — până îl completezi, rămâne salvat titlul anterior.'}
+      />
       <TextArea label="Descriere" name="description" value={v.description} onChange={(description) => set({ description })} disabled={disabled} />
       <div className="grid2">
         <SelectField label="Categorie" name="category" value={v.category} options={FINDING_CATEGORIES} onChange={(category) => set({ category })} disabled={disabled} />
@@ -78,7 +87,7 @@ function Fields({ v, set, disabled }: { v: FindingInput; set: (p: Partial<Findin
 }
 
 export function FindingNew({ projectId }: { projectId: string }) {
-  const [v, setV] = useState<FindingInput>({
+  const [v, setV, clearDraft] = useDraft<FindingInput>(`sia-ciorna-constatare-${projectId}`, {
     title: '',
     description: '',
     category: 'calitate',
@@ -103,6 +112,7 @@ export function FindingNew({ projectId }: { projectId: string }) {
           setSaving(true)
           try {
             const f = await createFinding(projectId, { ...v, title: v.title.trim() })
+            clearDraft()
             toast('Constatare salvată. Adaugă fotografiile „înainte”.', 'ok')
             navigate(`/constatare/${f.id}`, { replace: true })
           } catch (err) {
@@ -124,7 +134,12 @@ export function FindingScreen({ id }: { id: string }) {
   const f = useLiveQuery(() => db.findings.get(id), [id])
   const [initial, setInitial] = useState<Finding | null | undefined>(undefined)
   useEffect(() => {
-    void db.findings.get(id).then((x) => setInitial(x && x.deletedAt === null ? x : null))
+    void (async () => {
+      const x = await db.findings.get(id)
+      const p = x ? await db.projects.get(x.projectId) : undefined
+      // o constatare a unui proiect aflat în Coș nu se mai editează
+      setInitial(x && x.deletedAt === null && p && p.deletedAt === null ? x : null)
+    })()
   }, [id])
   if (initial === undefined) return <Layout title="Constatare" backTo="/constatari">{null}</Layout>
   if (initial === null)
@@ -132,7 +147,7 @@ export function FindingScreen({ id }: { id: string }) {
       <Layout title="Constatare" backTo="/constatari">
         <div className="empty">
           <h2>Constatarea nu există</h2>
-          <p>Poate a fost ștearsă. Verifică în Coș.</p>
+          <p>Poate a fost ștearsă (sau proiectul ei este în Coș). Verifică în Coș.</p>
         </div>
       </Layout>
     )
@@ -140,9 +155,9 @@ export function FindingScreen({ id }: { id: string }) {
 }
 
 function FindingEditor({ initial, live }: { initial: Finding; live: Finding }) {
-  const save = useCallback((patch: Partial<Finding>) => updateFinding(initial.id, patch as Partial<FindingInput>), [initial.id])
+  const save = useCallback((full: Finding) => saveFinding(full), [])
   const { value, update, state, flush } = useAutosave<Finding>(initial, save)
-  const v = value!
+  const v = value
   const overdue = isOverdue(live, isoDate())
 
   const append = (cur: string, t: string) => (cur.trim() ? `${cur.trimEnd()}\n${t}` : t)
@@ -150,6 +165,7 @@ function FindingEditor({ initial, live }: { initial: Finding; live: Finding }) {
     { label: 'Descriere', insert: (t) => update({ description: append(v.description, t) }) },
     { label: 'Titlu', insert: (t) => update({ title: v.title.trim() ? `${v.title} ${t}` : t }) },
     { label: 'Locație', insert: (t) => update({ location: v.location.trim() ? `${v.location} ${t}` : t }) },
+    { label: 'Responsabil', insert: (t) => update({ responsible: v.responsible.trim() ? `${v.responsible} ${t}` : t }) },
   ]
 
   return (
@@ -196,7 +212,7 @@ function FindingEditor({ initial, live }: { initial: Finding; live: Finding }) {
         </ul>
       </Section>
       <Section title="Detalii" defaultOpen>
-        <Fields v={v} set={(p) => update(p)} />
+        <Fields v={v} set={(p) => update(p)} editing />
       </Section>
       <Section title="Fotografii „înainte”" defaultOpen>
         <PhotoSection projectId={v.projectId} ownerType="finding" ownerId={v.id} role="before" />

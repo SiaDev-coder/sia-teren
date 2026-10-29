@@ -15,3 +15,16 @@ Format: problemă — cauză — rezolvare.
 11. **Sesiunea s-a repornit (cod 137) la rularea testelor de voce cu 3 browsere în paralel** — testele de voce rulează cu `--workers=1`.
 12. **`Content-Encoding: gzip` adăugat automat de server pentru `*.wasm.gz`** → redenumit `*.wasm.gzdata` + detecție după semnătură.
 13. **E2E 6 nu poate rula aici**: huggingface.co blocat (403 la proxy). Testul există complet (descărcare → offline → transcriere fișier român → inserare în câmp) și se sare automat cu motivul afișat; rulează când mediul are acces.
+
+## Verificarea independentă — runda 1 (23 de constatări) și reparații
+- **V-01 (critică) pierdere la reîncărcare sub 250 ms** — salvarea automată scrie acum imediat întreaga înregistrare la fiecare modificare (`useAutosave` + `saveReport`/`saveFinding`, o singură tranzacție). Test: reîncărcare imediată după tastare și după rând nou (`02-flux-complet.spec.ts`).
+- **V-02 (critică) „Copiază din ziua precedentă” ștergea personalul** — vizualizarea unei zile nu mai creează raport (se creează la prima completare); copierea ia ultimul raport cu personal/utilaje și nu schimbă nimic dacă nu găsește. Teste unitare + E2E.
+- **V-03 rapoarte goale la răsfoire** — rezolvat de aceeași schimbare (test E2E: 3 zile răsfoite → tot 2 rapoarte).
+- **V-04 „Transaction committed too early”** — `navigator.storage.persist()` era apelat din interiorul unei tranzacții Dexie; marcarea modificărilor rulează acum separat, niciodată în tranzacții. Test E2E după restaurare.
+- **V-05 / V-06 ecran alb după restaurarea unei copii modificate** — `createdAt` din manifest validat; toate înregistrările sunt normalizate (câmpuri lipsă → valori sigure, enumerări validate, date invalide respinse); plus `ErrorBoundary` cu mesaj în română pe fiecare ecran.
+- **V-07 data ultimei copii la partajare anulată** — se scrie doar după trimitere/descărcare reușită.
+- **V-08 transcriere blocată în „pending”** — afișată ca „întreruptă”, cu buton de reluare.
+- **V-10..V-18 (minore)** — raport finalizat: fără fotografii/note noi, fără suprascriere din tab vechi, fără ștergere directă, fără recuperări în el; numere întregi doar cu cifre, limită 1.000.000; date din adresă validate (2000–2100, zile reale); proiect inexistent la editare; titlul constatării nu se mai salvează gol; confirmare la ștergerea rândurilor completate; constatările/elementele unui proiect din Coș nu se editează/recuperează separat; ciorne locale pentru „Proiect nou” și „Constatare nouă”; filtru de stare invalid în adresă ignorat.
+- **V-19** — export „Fotografii .zip” cu adnotări + banda de text arse în imagine (Rapoarte PDF și CSV).
+- **V-22** — textul transcris se poate insera în toate câmpurile text ale raportului (inclusiv rândurile de activități, materiale, utilaje, personal) și ale constatării.
+- **V-09 (E2E 6), V-20 (Zlib, ORT dev), V-21 (ArrayBuffer), V-23 (format dată în Chromium headless)** — explicate în DECIZII / raportul final; V-09 depinde de accesul la huggingface.co.

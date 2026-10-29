@@ -1,64 +1,63 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast, errorMessage } from './ui'
 
 export type SaveState = 'saved' | 'saving' | 'error'
 
 /**
- * Salvare automată: fiecare modificare se scrie în IndexedDB după 250 ms de liniște
- * și imediat la ascunderea aplicației (apel, schimbare de aplicație, închidere).
+ * Salvare automată imediată: la fiecare modificare se scrie în IndexedDB înregistrarea completă,
+ * în același moment (fără așteptare), ca nimic să nu se piardă la închidere, apel sau reîncărcare.
+ * IndexedDB păstrează ordinea scrierilor pe același tabel, deci ultima valoare câștigă.
  */
-export function useAutosave<T extends object>(initial: T | null, save: (patch: Partial<T>) => Promise<void>) {
-  const [value, setValue] = useState<T | null>(initial)
+export function useAutosave<T extends object>(initial: T, save: (full: T) => Promise<void>) {
+  const [value, setValueState] = useState<T>(initial)
   const [state, setState] = useState<SaveState>('saved')
-  const pending = useRef<Partial<T>>({})
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveRef = useRef(save)
-  useEffect(() => {
-    saveRef.current = save
-  }, [save])
+  const ref = useRef<T>(initial)
+  const inFlight = useRef(0)
+  const last = useRef<Promise<void>>(Promise.resolve())
 
-  const flush = useCallback(async () => {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-    }
-    const p = pending.current
-    if (Object.keys(p).length === 0) return
-    pending.current = {}
-    try {
-      await saveRef.current(p)
-      if (Object.keys(pending.current).length === 0) setState('saved')
-    } catch (e) {
-      pending.current = { ...p, ...pending.current }
-      setState('error')
-      toast(errorMessage(e), 'error')
-    }
-  }, [])
+  const write = useCallback(
+    (full: T) => {
+      inFlight.current++
+      setState('saving')
+      const p = save(full).then(
+        () => {
+          inFlight.current--
+          if (inFlight.current === 0) setState('saved')
+        },
+        (e) => {
+          inFlight.current--
+          setState('error')
+          toast(errorMessage(e), 'error')
+        },
+      )
+      last.current = p
+      return p
+    },
+    [save],
+  )
 
   const update = useCallback(
     (patch: Partial<T>) => {
-      setValue((v) => (v ? { ...v, ...patch } : v))
-      pending.current = { ...pending.current, ...patch }
-      setState('saving')
-      if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => void flush(), 250)
+      ref.current = { ...ref.current, ...patch }
+      setValueState(ref.current)
+      void write(ref.current)
     },
-    [flush],
+    [write],
   )
 
-  useEffect(() => {
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') void flush()
-    }
-    const onPageHide = () => void flush()
-    document.addEventListener('visibilitychange', onHide)
-    window.addEventListener('pagehide', onPageHide)
-    return () => {
-      document.removeEventListener('visibilitychange', onHide)
-      window.removeEventListener('pagehide', onPageHide)
-      void flush()
-    }
-  }, [flush])
+  /** Înlocuiește valoarea locală fără a o scrie (ex. după o modificare făcută direct în baza de date). */
+  const setValue = useCallback((v: T) => {
+    ref.current = v
+    setValueState(v)
+  }, [])
 
-  return { value, setValue, update, flush, state }
+  /** Așteaptă terminarea tuturor scrierilor pornite. */
+  const flush = useCallback(async () => {
+    await last.current
+  }, [])
+
+  /** Scrie valoarea curentă chiar dacă nu s-a modificat nimic (ex. ca raportul să existe înainte de o fotografie). */
+  const saveNow = useCallback(() => write(ref.current), [write])
+
+  return { value, setValue, update, flush, saveNow, state, current: ref }
 }

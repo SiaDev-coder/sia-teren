@@ -79,6 +79,16 @@ test('E2E 5: copie de siguranță → ștergi tot → restaurare → date identi
   const after = await dbSnapshot(page)
   expect(after).toEqual(before)
 
+  // regresie V-04: după restaurare, deschiderea raportului de azi nu dă eroare de tranzacție
+  const errs: string[] = []
+  page.on('pageerror', (e) => errs.push(e.message))
+  await page.goto('./#/azi')
+  await expect(page.getByTestId('report-status')).toHaveText('Ciornă')
+  await section(page, 'Personal').getByRole('button', { name: 'Adaugă categorie' }).click()
+  await expect(page.getByTestId('save-state')).toHaveText('Salvat')
+  await expect(page.getByText(/Transaction|committed/)).toHaveCount(0)
+  expect(errs).toEqual([])
+
   // aplicația afișează datele restaurate
   await page.goto(`./#/proiect/${pid}/raport/2026-10-21`)
   await expect(section(page, 'Personal').getByLabel('Categorie')).toHaveValue('Sudori PEHD')

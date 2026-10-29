@@ -1,7 +1,22 @@
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 import { db, SCHEMA_VERSION } from '../db/db'
 import { getSettings, setSetting, type Settings } from '../db/settings'
-import type { AudioNote, DailyReport, Finding, Photo, Project, BaseRecord } from '../db/types'
+import {
+  FINDING_CATEGORIES,
+  FINDING_STATUSES,
+  SEVERITIES,
+  WEATHER_OPTIONS,
+  type AudioNote,
+  type DailyReport,
+  type Finding,
+  type Photo,
+  type Project,
+  type BaseRecord,
+  type GpsFix,
+  type Annotation,
+} from '../db/types'
+import { isValidIsoDate } from './format'
+import { newId } from './ids'
 import { extensionForMime } from './audio'
 import { toStored } from '../db/binary'
 
@@ -32,6 +47,11 @@ const PORTABLE_SETTINGS = ['companyName', 'userName', 'theme'] as const
 
 async function blobBytes(b: Blob): Promise<Uint8Array> {
   return new Uint8Array(await b.arrayBuffer())
+}
+
+/** Se apelează doar după ce copia a fost efectiv trimisă sau descărcată. */
+export async function markBackupDone(at = Date.now()): Promise<void> {
+  await setSetting('lastBackupAt', at)
 }
 
 export async function createBackup(appVersion: string): Promise<{ blob: Blob; filename: string; manifest: BackupManifest }> {
@@ -86,7 +106,6 @@ export async function createBackup(appVersion: string): Promise<{ blob: Blob; fi
   for (const [k, v] of Object.entries(files)) zipInput[k] = [v, { level: k.endsWith('.json') ? 6 : 0 }]
   const zipped = zipSync(zipInput)
   const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`
-  await setSetting('lastBackupAt', now.getTime())
   return {
     blob: new Blob([zipped as BlobPart], { type: 'application/zip' }),
     filename: `SIA-Teren_copie_${stamp}.zip`,
@@ -111,6 +130,115 @@ function checkBase(r: unknown, what: string): asserts r is BaseRecord {
   ) {
     throw new BackupError(`Fișierul conține o înregistrare invalidă (${what}).`)
   }
+}
+
+// ---------- Normalizare: orice câmp lipsă sau de tip greșit primește o valoare sigură ----------
+const str = (v: unknown, d = ''): string => (typeof v === 'string' ? v : d)
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d)
+const rec = (v: unknown): Record<string, unknown> => (isObj(v) ? v : {})
+
+function baseOf(r: Record<string, unknown>): BaseRecord {
+  return { id: r.id as string, createdAt: r.createdAt as number, updatedAt: r.updatedAt as number, deletedAt: (r.deletedAt as number | null) ?? null }
+}
+
+function gpsOf(v: unknown): GpsFix | null {
+  const g = rec(v)
+  const lat = num(g.lat)
+  const lng = num(g.lng)
+  if (lat === null || lng === null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null
+  return { lat, lng, accuracy: num(g.accuracy) ?? 0, at: num(g.at) ?? 0 }
+}
+
+function normProject(v: unknown): Project {
+  const r = rec(v)
+  return {
+    ...baseOf(r),
+    name: str(r.name).trim() || 'Proiect fără nume',
+    beneficiary: str(r.beneficiary),
+    contractNo: str(r.contractNo),
+    lot: str(r.lot),
+    locality: str(r.locality),
+    county: str(r.county),
+    contractor: str(r.contractor),
+    supervisor: str(r.supervisor),
+    startDate: isValidIsoDate(str(r.startDate)) ? str(r.startDate) : '',
+    archived: r.archived === 1 ? 1 : 0,
+    lastUsedAt: num(r.lastUsedAt) ?? (r.updatedAt as number),
+  }
+}
+
+function normReport(v: unknown): DailyReport {
+  const r = rec(v)
+  if (typeof r.projectId !== 'string' || !isValidIsoDate(str(r.date))) throw new BackupError('Raport zilnic invalid în copie (proiect sau dată).')
+  const rows = <T>(x: unknown, f: (o: Record<string, unknown>) => T) => arr(x).map((o) => f(rec(o)))
+  return {
+    ...baseOf(r),
+    projectId: r.projectId,
+    date: str(r.date),
+    weather: arr(r.weather).filter((w): w is (typeof WEATHER_OPTIONS)[number] => WEATHER_OPTIONS.includes(w as never)),
+    tempMorning: num(r.tempMorning),
+    tempNoon: num(r.tempNoon),
+    personnel: rows(r.personnel, (o) => ({ id: str(o.id) || newId(), category: str(o.category), count: num(o.count) })),
+    equipment: rows(r.equipment, (o) => ({ id: str(o.id) || newId(), name: str(o.name), count: num(o.count), hours: num(o.hours) })),
+    activities: rows(r.activities, (o) => ({ id: str(o.id) || newId(), description: str(o.description), quantity: num(o.quantity), unit: str(o.unit), location: str(o.location) })),
+    materials: rows(r.materials, (o) => ({ id: str(o.id) || newId(), name: str(o.name), quantity: num(o.quantity), unit: str(o.unit), document: str(o.document) })),
+    problems: str(r.problems),
+    instructions: str(r.instructions),
+    instructionsFrom: str(r.instructionsFrom),
+    visits: str(r.visits),
+    safety: str(r.safety),
+    notes: str(r.notes),
+    status: r.status === 'final' ? 'final' : 'draft',
+    finalizedAt: num(r.finalizedAt),
+  }
+}
+
+function normFinding(v: unknown): Finding {
+  const r = rec(v)
+  if (typeof r.projectId !== 'string') throw new BackupError('Constatare invalidă în copie (fără proiect).')
+  const status = oneOf(r.status, FINDING_STATUSES, 'Deschisă')
+  const history = arr(r.history)
+    .map(rec)
+    .filter((h) => FINDING_STATUSES.includes(h.to as never) && num(h.at) !== null)
+    .map((h) => ({ from: FINDING_STATUSES.includes(h.from as never) ? (h.from as Finding['status']) : null, to: h.to as Finding['status'], at: h.at as number }))
+  return {
+    ...baseOf(r),
+    projectId: r.projectId,
+    title: str(r.title).trim() || 'Constatare fără titlu',
+    description: str(r.description),
+    category: oneOf(r.category, FINDING_CATEGORIES, 'altele'),
+    severity: oneOf(r.severity, SEVERITIES, 'minoră'),
+    location: str(r.location),
+    gps: r.gps ? gpsOf(r.gps) : null,
+    responsible: str(r.responsible),
+    dueDate: isValidIsoDate(str(r.dueDate)) ? str(r.dueDate) : '',
+    status,
+    history: history.length ? history : [{ from: null, to: status, at: r.createdAt as number }],
+  }
+}
+
+function owner(r: Record<string, unknown>, what: string) {
+  if ((r.ownerType !== 'report' && r.ownerType !== 'finding') || typeof r.ownerId !== 'string' || typeof r.projectId !== 'string')
+    throw new BackupError(`${what} fără raport/constatare în copie.`)
+  return { projectId: r.projectId, ownerType: r.ownerType as 'report' | 'finding', ownerId: r.ownerId }
+}
+
+function normAnnotations(v: unknown): Annotation[] {
+  return arr(v)
+    .map(rec)
+    .filter((a) => ['arrow', 'rect', 'ellipse', 'free', 'text'].includes(a.tool as string) && Array.isArray(a.points))
+    .map((a) => ({
+      id: str(a.id) || newId(),
+      tool: a.tool as Annotation['tool'],
+      color: str(a.color, '#e53935'),
+      points: arr(a.points)
+        .map(rec)
+        .filter((p) => num(p.x) !== null && num(p.y) !== null)
+        .map((p) => ({ x: p.x as number, y: p.y as number })),
+      ...(typeof a.text === 'string' ? { text: a.text } : {}),
+    }))
 }
 
 export interface ParsedBackup {
@@ -143,6 +271,9 @@ export async function parseBackup(file: Blob): Promise<ParsedBackup> {
     throw new BackupError('Copia de siguranță este deteriorată (date ilizibile).')
   }
   if (!isObj(manifest) || manifest.app !== BACKUP_APP) throw new BackupError('Fișierul nu provine din aplicația SIA Teren.')
+  if (typeof manifest.createdAt !== 'string' || Number.isNaN(Date.parse(manifest.createdAt))) {
+    throw new BackupError('Copia de siguranță este deteriorată (data copiei lipsește sau e invalidă).')
+  }
   if (typeof manifest.schemaVersion !== 'number' || manifest.schemaVersion > SCHEMA_VERSION) {
     throw new BackupError('Copia a fost făcută cu o versiune mai nouă a aplicației. Actualizează aplicația și încearcă din nou.')
   }
@@ -157,37 +288,45 @@ export async function parseBackup(file: Blob): Promise<ParsedBackup> {
   const findings = arr('findings')
   const photosM = arr('photos')
   const audioM = arr('audio')
-  projects.forEach((r) => {
-    checkBase(r, 'proiect')
-    if (typeof (r as Project).name !== 'string') throw new BackupError('Proiect fără denumire în copie.')
-  })
-  reports.forEach((r) => {
-    checkBase(r, 'raport')
-    const x = r as DailyReport
-    if (typeof x.projectId !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x.date) || !Array.isArray(x.personnel)) {
-      throw new BackupError('Raport zilnic invalid în copie.')
-    }
-  })
-  findings.forEach((r) => {
-    checkBase(r, 'constatare')
-    const x = r as Finding
-    if (typeof x.projectId !== 'string' || typeof x.title !== 'string' || !Array.isArray(x.history)) {
-      throw new BackupError('Constatare invalidă în copie.')
-    }
-  })
-  const photos: Photo[] = photosM.map((r) => {
-    checkBase(r, 'fotografie')
-    const { file: f, mimeType, ...rest } = r as PhotoMeta
+  for (const [list, what] of [[projects, 'proiect'], [reports, 'raport'], [findings, 'constatare'], [photosM, 'fotografie'], [audioM, 'notă vocală']] as const)
+    list.forEach((r) => checkBase(r, what))
+  const photos: Photo[] = photosM.map((v) => {
+    const r = rec(v)
+    const f = r.file
     const bytes = typeof f === 'string' ? entries[f] : undefined
     if (!bytes) throw new BackupError(`Lipsește fișierul fotografiei ${String(f)} din arhivă.`)
-    return { ...rest, blob: new Blob([bytes as BlobPart], { type: mimeType || 'image/jpeg' }) } as Photo
+    const width = num(r.width)
+    const height = num(r.height)
+    if (!width || !height || width <= 0 || height <= 0) throw new BackupError('Fotografie cu dimensiuni invalide în copie.')
+    return {
+      ...baseOf(r),
+      ...owner(r, 'Fotografie'),
+      role: oneOf(r.role, ['general', 'before', 'after'] as const, 'general'),
+      blob: new Blob([bytes as BlobPart], { type: str(r.mimeType, 'image/jpeg') }),
+      width,
+      height,
+      takenAt: num(r.takenAt) ?? (r.createdAt as number),
+      gps: r.gps ? gpsOf(r.gps) : null,
+      annotations: normAnnotations(r.annotations),
+      caption: str(r.caption),
+    }
   })
-  const audio: AudioNote[] = audioM.map((r) => {
-    checkBase(r, 'notă vocală')
-    const { file: f, ...rest } = r as AudioMeta
+  const audio: AudioNote[] = audioM.map((v) => {
+    const r = rec(v)
+    const f = r.file
     const bytes = typeof f === 'string' ? entries[f] : undefined
     if (!bytes) throw new BackupError(`Lipsește fișierul audio ${String(f)} din arhivă.`)
-    return { ...rest, blob: new Blob([bytes as BlobPart], { type: rest.mimeType }) } as AudioNote
+    const mimeType = str(r.mimeType, 'audio/mp4')
+    return {
+      ...baseOf(r),
+      ...owner(r, 'Notă vocală'),
+      blob: new Blob([bytes as BlobPart], { type: mimeType }),
+      mimeType,
+      durationSec: num(r.durationSec) ?? 0,
+      transcript: str(r.transcript),
+      transcriptStatus: oneOf(r.transcriptStatus, ['none', 'done', 'error'] as const, 'none'),
+      transcriptError: str(r.transcriptError),
+    }
   })
   const settings: Partial<Settings> = {}
   if (isObj(data.settings)) {
@@ -200,9 +339,9 @@ export async function parseBackup(file: Blob): Promise<ParsedBackup> {
   }
   return {
     manifest,
-    projects: projects as Project[],
-    reports: reports as DailyReport[],
-    findings: findings as Finding[],
+    projects: projects.map(normProject),
+    reports: reports.map(normReport),
+    findings: findings.map(normFinding),
     photos,
     audio,
     settings,

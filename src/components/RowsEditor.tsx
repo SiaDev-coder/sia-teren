@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { newId } from '../lib/ids'
 import { IconPlus, IconTrash } from './icons'
+import { confirmDialog } from './ui'
 
 /** Listă editabilă de rânduri (personal, utilaje, activități, materiale). */
 export function RowsEditor<T extends { id: string }>({
@@ -30,7 +31,11 @@ export function RowsEditor<T extends { id: string }>({
                 {itemLabel} {i + 1}
               </span>
               {!disabled && (
-                <button type="button" className="icon-btn" aria-label={`Șterge ${itemLabel.toLowerCase()} ${i + 1}`} onClick={() => onChange(rows.filter((r) => r.id !== row.id))}>
+                <button type="button" className="icon-btn" aria-label={`Șterge ${itemLabel.toLowerCase()} ${i + 1}`} onClick={async () => {
+                    const filled = Object.entries(row).some(([k, v]) => k !== 'id' && k !== 'unit' && v !== null && v !== '')
+                    if (filled && !(await confirmDialog({ title: `Ștergi ${itemLabel.toLowerCase()} ${i + 1}?`, confirmLabel: 'Șterge', danger: true }))) return
+                    onChange(rows.filter((r) => r.id !== row.id))
+                  }}>
                   <IconTrash />
                 </button>
               )}

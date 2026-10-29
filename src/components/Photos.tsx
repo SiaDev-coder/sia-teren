@@ -30,10 +30,12 @@ interface Props {
   role: PhotoRole
   disabled?: boolean
   label?: string
+  /** apelat înainte de prima fotografie (ex. ca raportul să fie salvat) */
+  beforeAdd?: () => Promise<void>
 }
 
 export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function PhotoSection(
-  { projectId, ownerType, ownerId, role, disabled, label },
+  { projectId, ownerType, ownerId, role, disabled, label, beforeAdd },
   ref,
 ) {
   const all = useLiveQuery(() => photosFor(ownerType, ownerId), [ownerType, ownerId])
@@ -48,6 +50,12 @@ export const PhotoSection = forwardRef<PhotoSectionHandle, Props>(function Photo
   const onFiles = async (files: FileList | null) => {
     if (!files || !files.length) return
     const list = Array.from(files)
+    try {
+      await beforeAdd?.()
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+      return
+    }
     setBusy(list.length)
     const ids: string[] = []
     let failed = 0

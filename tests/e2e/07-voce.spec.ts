@@ -132,3 +132,33 @@ test('fără acces la huggingface.co: „Descarcă” afișează un mesaj clar, 
   await expect(page.getByText(/Nu se poate afla mărimea modelului/)).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('button', { name: 'Descarcă pentru folosire offline' }).first()).toBeEnabled()
 })
+
+test('regresie V-08: transcriere întreruptă (aplicația închisă) se poate relua', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'logică independentă de browser')
+  const pid = await createProject(page, 'Transcriere întreruptă')
+  await page.goto(`./#/proiect/${pid}/raport/2026-10-22`)
+  await openSection(page, 'Note vocale')
+  await section(page, 'Note vocale').getByTestId('audio-input').setInputFiles(fixture('nota-ro.wav'))
+  await expect(section(page, 'Note vocale').locator('.audio-item')).toHaveCount(1)
+  // simulăm închiderea aplicației în timpul transcrierii: starea rămâne „pending” în baza de date
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((res) => {
+      const r = indexedDB.open('sia-teren')
+      r.onsuccess = () => res(r.result)
+    })
+    await new Promise<void>((res) => {
+      const st = db.transaction('audio', 'readwrite').objectStore('audio')
+      const q = st.getAll()
+      q.onsuccess = () => {
+        const a = q.result[0]
+        a.transcriptStatus = 'pending'
+        st.put(a).onsuccess = () => res()
+      }
+    })
+    db.close()
+  })
+  await page.reload()
+  await openSection(page, 'Note vocale')
+  await expect(section(page, 'Note vocale')).toContainText('Transcrierea a fost întreruptă')
+  await expect(section(page, 'Note vocale')).not.toContainText('Se transcrie pe telefon')
+})

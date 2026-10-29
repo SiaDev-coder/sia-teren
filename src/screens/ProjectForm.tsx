@@ -4,6 +4,7 @@ import { createProject, updateProject, type ProjectInput } from '../db/repo'
 import { Layout } from '../components/Layout'
 import { TextField, toast, errorMessage } from '../components/ui'
 import { navigate } from '../router'
+import { useDraft } from '../components/useDraft'
 
 const EMPTY: ProjectInput = {
   name: '',
@@ -18,20 +19,22 @@ const EMPTY: ProjectInput = {
 }
 
 export function ProjectForm({ id }: { id?: string }) {
-  const [v, setV] = useState<ProjectInput>(EMPTY)
+  const [v, setV, clearDraft] = useDraft<ProjectInput>(id ? null : 'sia-ciorna-proiect-nou', EMPTY)
   const [loaded, setLoaded] = useState(!id)
+  const [missing, setMissing] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!id) return
     void db.projects.get(id).then((p) => {
-      if (p) {
+      if (!p || p.deletedAt !== null) setMissing(true)
+      else {
         const { name, beneficiary, contractNo, lot, locality, county, contractor, supervisor, startDate } = p
         setV({ name, beneficiary, contractNo, lot, locality, county, contractor, supervisor, startDate })
       }
       setLoaded(true)
     })
-  }, [id])
+  }, [id, setV])
 
   const set = (k: keyof ProjectInput) => (val: string) => setV((s) => ({ ...s, [k]: val }))
 
@@ -50,6 +53,7 @@ export function ProjectForm({ id }: { id?: string }) {
         navigate(`/proiect/${id}`)
       } else {
         const p = await createProject(clean)
+        clearDraft()
         toast('Proiect creat.', 'ok')
         navigate(`/proiect/${p.id}`, { replace: true })
       }
@@ -61,6 +65,15 @@ export function ProjectForm({ id }: { id?: string }) {
   }
 
   if (!loaded) return <Layout title="Proiect" backTo="/">{null}</Layout>
+  if (missing)
+    return (
+      <Layout title="Proiect" backTo="/">
+        <div className="empty">
+          <h2>Proiectul nu există</h2>
+          <p>Poate a fost șters. Verifică în Coș.</p>
+        </div>
+      </Layout>
+    )
   return (
     <Layout title={id ? 'Editează proiectul' : 'Proiect nou'} backTo={id ? `/proiect/${id}` : '/'}>
       <form onSubmit={submit} className="card" noValidate>

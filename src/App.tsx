@@ -19,6 +19,7 @@ import { AboutScreen } from './screens/About'
 import { InstallGuide } from './screens/Install'
 import { ExportScreen } from './screens/Export'
 import { Layout } from './components/Layout'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function Route() {
   const path = useHashPath()
@@ -51,6 +52,16 @@ function Route() {
         </a>
       </div>
     </Layout>
+  )
+}
+
+function RouteWithBoundary() {
+  const path = useHashPath()
+  // cheia pe adresă: la schimbarea ecranului eroarea anterioară dispare
+  return (
+    <ErrorBoundary key={path}>
+      <Route />
+    </ErrorBoundary>
   )
 }
 
@@ -87,7 +98,7 @@ export function App() {
         Sari la conținut
       </a>
       <UpdateBanner />
-      <Route />
+      <RouteWithBoundary />
       <BottomNav />
       <ToastHost />
       <ConfirmHost />

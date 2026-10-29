@@ -170,6 +170,8 @@ export function NumberField(props: {
   name?: string
   integer?: boolean
   allowNegative?: boolean
+  /** valoarea maximă acceptată (implicit 1.000.000) */
+  max?: number
 }) {
   const [text, setText] = useState(roNumber(props.value))
   const [focused, setFocused] = useState(false)
@@ -190,11 +192,12 @@ export function NumberField(props: {
         onBlur={() => setFocused(false)}
         onChange={(e) => {
           const raw = e.target.value
-          const pattern = props.allowNegative ? /^-?[\d\s]*[,.]?\d*$/ : /^[\d\s]*[,.]?\d*$/
+          // numere întregi: doar cifre (fără separatori, ca „1.000” să nu fie citit greșit)
+          const pattern = props.integer ? /^\d*$/ : props.allowNegative ? /^-?\d*[,.]?\d*$/ : /^\d*[,.]?\d*$/
           if (raw !== '' && !pattern.test(raw)) return
+          const n = parseRoNumber(raw)
+          if (n !== null && Math.abs(n) > (props.max ?? 1_000_000)) return
           setText(raw)
-          let n = parseRoNumber(raw)
-          if (n !== null && props.integer) n = Math.round(n)
           props.onChange(n)
         }}
       />

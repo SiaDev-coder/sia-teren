@@ -105,10 +105,10 @@ describe('copie de siguranță → restaurare', () => {
     const bytes = new Uint8Array(await blob.arrayBuffer())
     const damaged = bytes.slice(0, Math.floor(bytes.length / 2))
     await expect(parseBackup(new Blob([damaged]))).rejects.toThrow(BackupError)
-    const future = zipSync({ 'manifest.json': strToU8(JSON.stringify({ app: 'SIA Teren', schemaVersion: 99 })), 'date.json': strToU8('{}') })
+    const future = zipSync({ 'manifest.json': strToU8(JSON.stringify({ app: 'SIA Teren', schemaVersion: 99, createdAt: new Date().toISOString() })), 'date.json': strToU8('{}') })
     await expect(parseBackup(new Blob([future as BlobPart]))).rejects.toThrow(/versiune mai nouă/)
     const missingPhoto = zipSync({
-      'manifest.json': strToU8(JSON.stringify({ app: 'SIA Teren', schemaVersion: 2 })),
+      'manifest.json': strToU8(JSON.stringify({ app: 'SIA Teren', schemaVersion: 2, createdAt: new Date().toISOString() })),
       'date.json': strToU8(JSON.stringify({ projects: [], reports: [], findings: [], audio: [], photos: [{ id: 'x', createdAt: 1, updatedAt: 1, deletedAt: null, file: 'foto/x.jpg' }], settings: {} })),
     })
     await expect(parseBackup(new Blob([missingPhoto as BlobPart]))).rejects.toThrow(/Lipsește fișierul fotografiei/)

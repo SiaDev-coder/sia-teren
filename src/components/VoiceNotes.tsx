@@ -20,6 +20,8 @@ interface Props {
   ownerId: string
   disabled?: boolean
   targets: InsertTarget[]
+  /** apelat înainte de a salva o notă (ex. ca raportul să existe) */
+  beforeAdd?: () => Promise<void>
 }
 
 const running = new Set<string>()
@@ -39,7 +41,7 @@ async function runTranscription(note: AudioNote) {
   }
 }
 
-export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets }: Props) {
+export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets, beforeAdd }: Props) {
   const notes = useLiveQuery(() => audioFor(ownerType, ownerId), [ownerType, ownerId]) ?? []
   const model = useLiveQuery(readyModel, [])
   const [rec, setRec] = useState<{ mr: MediaRecorder; started: number; stream: MediaStream } | null>(null)
@@ -68,7 +70,14 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets }:
       }
       a.src = u
     })
-    const note = await addAudio({ projectId, ownerType, ownerId, blob: f, mimeType: f.type || 'audio/mp4', durationSec })
+    let note: AudioNote
+    try {
+      await beforeAdd?.()
+      note = await addAudio({ projectId, ownerType, ownerId, blob: f, mimeType: f.type || 'audio/mp4', durationSec })
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+      return
+    }
     toast('Fișierul audio a fost atașat.', 'ok')
     if (await readyModel()) void runTranscription(note)
   }
@@ -119,7 +128,14 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets }:
         toast('Înregistrarea este goală.', 'error')
         return
       }
-      const note = await addAudio({ projectId, ownerType, ownerId, blob, mimeType: type, durationSec: Math.round((Date.now() - started) / 100) / 10 })
+      let note: AudioNote
+      try {
+        await beforeAdd?.()
+        note = await addAudio({ projectId, ownerType, ownerId, blob, mimeType: type, durationSec: Math.round((Date.now() - started) / 100) / 10 })
+      } catch (e) {
+        toast(errorMessage(e), 'error')
+        return
+      }
       toast('Nota vocală a fost salvată.', 'ok')
       if (await readyModel()) void runTranscription(note)
     }
@@ -166,6 +182,9 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets }:
 function NoteItem({ note, disabled, canTranscribe, targets }: { note: AudioNote; disabled?: boolean; canTranscribe: boolean; targets: InsertTarget[] }) {
   const url = useObjectUrl(note.blob)
   const [picking, setPicking] = useState(false)
+  // „pending” fără o transcriere care rulează acum = întreruptă (aplicația s-a închis între timp)
+  const pendingHere = note.transcriptStatus === 'pending' && running.has(note.id)
+  const interrupted = note.transcriptStatus === 'pending' && !running.has(note.id)
   return (
     <div className="audio-item">
       <div className="row">
@@ -173,7 +192,8 @@ function NoteItem({ note, disabled, canTranscribe, targets }: { note: AudioNote;
         <span className="muted small">{note.durationSec.toLocaleString('ro-RO')} s</span>
       </div>
       {url && <audio controls preload="metadata" src={url} />}
-      {note.transcriptStatus === 'pending' && <p className="muted small">Se transcrie pe telefon… (poate dura)</p>}
+      {pendingHere && <p className="muted small">Se transcrie pe telefon… (poate dura)</p>}
+      {interrupted && <p className="small" style={{ color: 'var(--danger)' }}>Transcrierea a fost întreruptă (aplicația s-a închis). Poți încerca din nou.</p>}
       {note.transcriptStatus === 'error' && <p className="small" style={{ color: 'var(--danger)' }}>{note.transcriptError}</p>}
       {note.transcriptStatus === 'done' && note.transcript && (
         <>
@@ -186,7 +206,7 @@ function NoteItem({ note, disabled, canTranscribe, targets }: { note: AudioNote;
         </>
       )}
       <div className="row" style={{ marginTop: 6 }}>
-        {canTranscribe && note.transcriptStatus !== 'pending' && !disabled && (
+        {canTranscribe && !pendingHere && !disabled && (
           <button type="button" className="btn grow" onClick={() => runTranscription(note)}>
             {note.transcriptStatus === 'done' ? 'Transcrie din nou' : 'Transcrie în text'}
           </button>

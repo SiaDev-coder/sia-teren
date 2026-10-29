@@ -27,21 +27,30 @@ function base(now = Date.now()): BaseRecord {
 }
 
 let persistAsked = false
-/** Marchează că există date noi (pentru amintirea de backup) și cere stocare persistentă după prima salvare. */
-async function markChanged(): Promise<void> {
-  await setSetting('lastDataChangeAt', Date.now())
-  if (persistAsked) return
-  persistAsked = true
-  const already = await getSetting('persistRequested')
-  if (already) return
-  let granted: boolean | null = null
-  try {
-    if (navigator.storage?.persist) granted = await navigator.storage.persist()
-  } catch {
-    granted = null
-  }
-  await setSetting('persistRequested', true)
-  await setSetting('persistGranted', granted)
+/**
+ * Marchează că există date noi (pentru amintirea de backup) și cere stocare persistentă după prima salvare.
+ * Nu se așteaptă și nu se apelează din interiorul unei tranzacții (navigator.storage.persist() nu e IndexedDB).
+ */
+function markChanged(): void {
+  const at = Date.now()
+  void (async () => {
+    try {
+      await setSetting('lastDataChangeAt', at)
+      if (persistAsked) return
+      persistAsked = true
+      if (await getSetting('persistRequested')) return
+      let granted: boolean | null = null
+      try {
+        if (navigator.storage?.persist) granted = await navigator.storage.persist()
+      } catch {
+        granted = null
+      }
+      await setSetting('persistRequested', true)
+      await setSetting('persistGranted', granted)
+    } catch (e) {
+      console.error('Marcare modificări:', e)
+    }
+  })()
 }
 
 // ---------- Proiecte ----------
@@ -55,18 +64,18 @@ export async function createProject(input: ProjectInput): Promise<Project> {
   const now = Date.now()
   const p: Project = { ...base(now), ...input, archived: 0, lastUsedAt: now }
   await db.projects.add(p)
-  await markChanged()
+  markChanged()
   return p
 }
 
 export async function updateProject(id: string, patch: Partial<ProjectInput>): Promise<void> {
   await db.projects.update(id, { ...patch, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
 }
 
 export async function setProjectArchived(id: string, archived: boolean): Promise<void> {
   await db.projects.update(id, { archived: archived ? 1 : 0, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
 }
 
 export async function touchProject(id: string): Promise<void> {
@@ -115,14 +124,39 @@ export async function findReport(projectId: string, date: string): Promise<Daily
 
 /** Data e unică per proiect: dacă raportul există deja, îl întoarce pe cel existent. */
 export async function getOrCreateReport(projectId: string, date: string = isoDate()): Promise<DailyReport> {
-  return db.transaction('rw', db.reports, db.settings, async () => {
+  const r = await db.transaction('rw', db.reports, async () => {
     const existing = await findReport(projectId, date)
-    if (existing) return existing
-    const r = emptyReport(projectId, date)
-    await db.reports.add(r)
-    await markChanged()
-    return r
+    if (existing) return { r: existing, created: false }
+    const fresh = emptyReport(projectId, date)
+    await db.reports.add(fresh)
+    return { r: fresh, created: true }
   })
+  if (r.created) markChanged()
+  return r.r
+}
+
+export class ReportExistsError extends Error {
+  constructor(public existing: DailyReport) {
+    super('Există deja un raport pentru această zi.')
+  }
+}
+
+/**
+ * Salvează raportul complet (folosit de salvarea automată). Prima scriere creează raportul,
+ * verificând unicitatea datei; un raport finalizat nu poate fi suprascris.
+ */
+export async function saveReport(r: DailyReport): Promise<void> {
+  await db.transaction('rw', db.reports, async () => {
+    const cur = await db.reports.get(r.id)
+    if (!cur) {
+      const other = await findReport(r.projectId, r.date)
+      if (other) throw new ReportExistsError(other)
+    } else if (cur.status === 'final') {
+      throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
+    }
+    await db.reports.put({ ...r, status: cur?.status ?? 'draft', finalizedAt: cur?.finalizedAt ?? null, deletedAt: cur?.deletedAt ?? null, updatedAt: Date.now() })
+  })
+  markChanged()
 }
 
 export async function updateReport(id: string, patch: Partial<DailyReport>): Promise<void> {
@@ -130,13 +164,14 @@ export async function updateReport(id: string, patch: Partial<DailyReport>): Pro
   if (!r) throw new Error('Raportul nu mai există.')
   if (r.status === 'final' && !('status' in patch)) throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
   await db.reports.update(id, { ...patch, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
 }
 
+/** Cel mai recent raport anterior care are personal sau utilaje (rapoartele goale sunt ignorate). */
 export async function previousReport(projectId: string, date: string): Promise<DailyReport | undefined> {
   const list = await db.reports.where('projectId').equals(projectId).toArray()
   return list
-    .filter((r) => r.deletedAt === null && r.date < date)
+    .filter((r) => r.deletedAt === null && r.date < date && (r.personnel.length > 0 || r.equipment.length > 0))
     .sort((a, b) => (a.date < b.date ? 1 : -1))[0]
 }
 
@@ -178,13 +213,34 @@ export async function createFinding(projectId: string, input: FindingInput): Pro
     history: [{ from: null, to: 'Deschisă', at: now }],
   }
   await db.findings.add(f)
-  await markChanged()
+  markChanged()
   return f
 }
 
 export async function updateFinding(id: string, patch: Partial<FindingInput>): Promise<void> {
   await db.findings.update(id, { ...patch, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
+}
+
+/**
+ * Salvarea automată a unei constatări: scrie câmpurile editabile; starea, istoricul și ștergerea
+ * rămân cele din baza de date. Un titlu golit nu se salvează (titlul e obligatoriu).
+ */
+export async function saveFinding(f: Finding): Promise<void> {
+  await db.transaction('rw', db.findings, async () => {
+    const cur = await db.findings.get(f.id)
+    if (!cur) throw new Error('Constatarea nu mai există.')
+    await db.findings.put({
+      ...f,
+      title: f.title.trim() ? f.title : cur.title,
+      status: cur.status,
+      history: cur.history,
+      deletedAt: cur.deletedAt,
+      createdAt: cur.createdAt,
+      updatedAt: Date.now(),
+    })
+  })
+  markChanged()
 }
 
 export async function changeFindingStatus(id: string, to: FindingStatus): Promise<void> {
@@ -199,7 +255,7 @@ export async function changeFindingStatus(id: string, to: FindingStatus): Promis
       updatedAt: now,
     })
   })
-  await markChanged()
+  markChanged()
 }
 
 // ---------- Fotografii ----------
@@ -216,16 +272,24 @@ export interface NewPhoto {
   gps: GpsFix | null
 }
 
+/** Fotografiile și notele vocale nu se mai pot adăuga într-un raport finalizat. */
+async function assertOwnerEditable(ownerType: OwnerType, ownerId: string): Promise<void> {
+  if (ownerType !== 'report') return
+  const r = await db.reports.get(ownerId)
+  if (r?.status === 'final') throw new Error('Raportul este finalizat. Apasă „Redeschide” pentru modificări.')
+}
+
 export async function addPhoto(p: NewPhoto): Promise<Photo> {
+  await assertOwnerEditable(p.ownerType, p.ownerId)
   const photo: Photo = { ...base(), ...p, annotations: [], caption: '' }
   await db.photos.add({ ...photo, blob: (await toStored(p.blob)) as unknown as Blob })
-  await markChanged()
+  markChanged()
   return photo
 }
 
 export async function updatePhoto(id: string, patch: Partial<Pick<Photo, 'annotations' | 'caption' | 'gps'>>): Promise<void> {
   await db.photos.update(id, { ...patch, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
 }
 
 export async function setAnnotations(id: string, annotations: Annotation[]): Promise<void> {
@@ -242,9 +306,10 @@ export async function photosFor(ownerType: OwnerType, ownerId: string): Promise<
 export async function addAudio(
   a: Pick<AudioNote, 'projectId' | 'ownerType' | 'ownerId' | 'blob' | 'mimeType' | 'durationSec'>,
 ): Promise<AudioNote> {
+  await assertOwnerEditable(a.ownerType, a.ownerId)
   const note: AudioNote = { ...base(), ...a, transcript: '', transcriptStatus: 'none', transcriptError: '' }
   await db.audio.add({ ...note, blob: (await toStored(a.blob)) as unknown as Blob })
-  await markChanged()
+  markChanged()
   return note
 }
 
@@ -253,7 +318,7 @@ export async function updateAudio(
   patch: Partial<Pick<AudioNote, 'transcript' | 'transcriptStatus' | 'transcriptError'>>,
 ): Promise<void> {
   await db.audio.update(id, { ...patch, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
 }
 
 export async function audioFor(ownerType: OwnerType, ownerId: string): Promise<AudioNote[]> {
@@ -270,12 +335,25 @@ function table(name: TableName) {
 export async function softDelete(name: TableName, id: string): Promise<void> {
   const now = Date.now()
   await table(name).update(id, { deletedAt: now, updatedAt: now })
-  await markChanged()
+  markChanged()
 }
 
 export class RestoreConflictError extends Error {}
 
 export async function restore(name: TableName, id: string): Promise<void> {
+  const rec = (await table(name).get(id)) as (BaseRecord & { projectId?: string; ownerType?: OwnerType; ownerId?: string }) | undefined
+  if (!rec) return
+  if (rec.projectId && name !== 'projects') {
+    const p = await db.projects.get(rec.projectId)
+    if (!p || p.deletedAt !== null) throw new RestoreConflictError('Proiectul acestui element este în Coș. Recuperează întâi proiectul.')
+  }
+  if ((name === 'photos' || name === 'audio') && rec.ownerId && rec.ownerType) {
+    const owner = rec.ownerType === 'report' ? await db.reports.get(rec.ownerId) : await db.findings.get(rec.ownerId)
+    if (!owner || owner.deletedAt !== null)
+      throw new RestoreConflictError(`${rec.ownerType === 'report' ? 'Raportul' : 'Constatarea'} acestui element este în Coș. Recuperează-l întâi.`)
+    if (rec.ownerType === 'report' && (owner as DailyReport).status === 'final')
+      throw new RestoreConflictError('Raportul este finalizat. Redeschide-l înainte de a recupera elementul.')
+  }
   if (name === 'reports') {
     const r = await db.reports.get(id)
     if (r && (await findReport(r.projectId, r.date))) {
@@ -283,7 +361,7 @@ export async function restore(name: TableName, id: string): Promise<void> {
     }
   }
   await table(name).update(id, { deletedAt: null, updatedAt: Date.now() })
-  await markChanged()
+  markChanged()
 }
 
 /** Șterge definitiv o înregistrare și tot ce ține de ea. */

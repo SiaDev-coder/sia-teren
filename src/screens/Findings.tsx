@@ -45,7 +45,10 @@ export function FindingsList({ projectId }: { projectId: string }) {
     async () => (await db.findings.where('projectId').equals(projectId).toArray()).filter((f) => f.deletedAt === null),
     [projectId],
   )
-  const [status, setStatus] = useState<StatusFilter>((q.get('stare') as StatusFilter) || 'neînchise')
+  const [status, setStatus] = useState<StatusFilter>(() => {
+    const st = q.get('stare')
+    return st && (['toate', 'neînchise', ...FINDING_STATUSES] as string[]).includes(st) ? (st as StatusFilter) : 'neînchise'
+  })
   const [severity, setSeverity] = useState<string>('toate')
   const [responsible, setResponsible] = useState<string>('toți')
   const [overdueOnly, setOverdueOnly] = useState(q.get('depasite') === '1')
@@ -209,7 +212,7 @@ function FindingItem({ f, overdue }: { f: Finding; overdue: boolean }) {
     <li>
       <a className={`list-item ${overdue ? 'overdue' : ''}`} href={`#/constatare/${f.id}`}>
         <div className="main">
-          <div className="title">{f.title}</div>
+          <div className="title">{f.title || '(fără titlu)'}</div>
           <div className="meta">
             {f.status}
             {f.responsible && ` · ${f.responsible}`}

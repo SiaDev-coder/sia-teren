@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { copyFromPrevious, finalizeReport, getOrCreateReport, reopenReport, softDelete, touchProject, updateReport } from '../db/repo'
+import { copyFromPrevious, emptyReport, finalizeReport, findReport, reopenReport, saveReport, softDelete, touchProject } from '../db/repo'
 import { WEATHER_OPTIONS, type ActivityRow, type DailyReport, type EquipmentRow, type MaterialRow, type PersonnelRow, type Weather } from '../db/types'
 import { Layout } from '../components/Layout'
 import { NumberField, Section, TextArea, TextField, confirmDialog, toast, errorMessage } from '../components/ui'
@@ -12,6 +12,8 @@ import { useAutosave } from '../components/useAutosave'
 import { IconBack, IconCamera, IconCheck, IconChevron, IconCopy, IconLock, IconMic, IconPdf, IconTrash } from '../components/icons'
 import { addDays, isoDate, roLongDate } from '../lib/format'
 import { navigate } from '../router'
+import { isValidIsoDate } from '../lib/format'
+import { ReportExistsError } from '../db/repo'
 import { shareOrDownload } from '../lib/share'
 import { newId } from '../lib/ids'
 
@@ -38,7 +40,7 @@ export function ReportScreen({ projectId, date }: { projectId: string; date: str
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId])
   const [initial, setInitial] = useState<DailyReport | null>(null)
   const [loadError, setError] = useState('')
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date))
+  const validDate = isValidIsoDate(date)
   const error = validDate ? loadError : 'Data din adresă nu este validă.'
 
   useEffect(() => {
@@ -50,7 +52,8 @@ export function ReportScreen({ projectId, date }: { projectId: string; date: str
         if (alive) setError('Proiectul nu există sau a fost șters.')
         return
       }
-      const r = await getOrCreateReport(projectId, date)
+      // Vizualizarea unei zile NU creează raportul; el se salvează la prima completare.
+      const r = (await findReport(projectId, date)) ?? emptyReport(projectId, date)
       await touchProject(projectId)
       if (alive) setInitial(r)
     })().catch((e) => alive && setError(errorMessage(e)))
@@ -72,11 +75,27 @@ export function ReportScreen({ projectId, date }: { projectId: string; date: str
 }
 
 function ReportEditor({ initial, projectName }: { initial: DailyReport; projectName: string }) {
-  const save = useCallback((patch: Partial<DailyReport>) => updateReport(initial.id, patch), [initial.id])
-  const { value, update, flush, state, setValue } = useAutosave<DailyReport>(initial, save)
+  const save = useCallback(async (full: DailyReport) => {
+    try {
+      await saveReport(full)
+    } catch (e) {
+      if (e instanceof ReportExistsError) {
+        // raportul zilei a fost creat între timp (ex. în altă fereastră): îl deschidem pe acela
+        navigate(`/proiect/${full.projectId}/raport/${full.date}?r=${Date.now()}`, { replace: true })
+        throw new Error('Raportul acestei zile exista deja; s-a deschis cel salvat.', { cause: e })
+      }
+      throw e
+    }
+  }, [])
+  const { value, update, flush, saveNow, state, setValue, current } = useAutosave<DailyReport>(initial, save)
+  /** Raportul trebuie să existe în baza de date înainte de fotografii, note vocale, PDF sau finalizare. */
+  const ensureSaved = async () => {
+    await flush()
+    if (!(await db.reports.get(current.current.id))) await saveNow()
+  }
   const photoRef = useRef<PhotoSectionHandle>(null)
   const [pdfBusy, setPdfBusy] = useState(false)
-  const r = value!
+  const r = value
   const locked = r.status === 'final'
   const totalPersonnel = r.personnel.reduce((s, p) => s + (p.count ?? 0), 0)
 
@@ -86,19 +105,37 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
     navigate(`/proiect/${r.projectId}/raport/${d}`)
   }
 
+  // textul transcris se poate pune în orice câmp text al raportului
+  const appendTo = (k: 'problems' | 'instructions' | 'instructionsFrom' | 'visits' | 'safety' | 'notes') => (t: string) =>
+    update({ [k]: k === 'instructionsFrom' ? (r[k].trim() ? `${r[k]} ${t}` : t) : append(r[k], t) })
+  const rowTarget = <K extends 'activities' | 'materials' | 'equipment' | 'personnel'>(list: K, field: string, label: string) =>
+    (r[list] as unknown as Record<string, unknown>[]).map((row, i) => ({
+      label: `${label} ${i + 1}`,
+      insert: (t: string) =>
+        update({
+          [list]: (r[list] as unknown as Record<string, unknown>[]).map((x) => (x === row ? { ...x, [field]: `${String(x[field] ?? '').trim()} ${t}`.trim() } : x)),
+        } as Partial<DailyReport>),
+    }))
   const targets: InsertTarget[] = [
     { label: 'Activitate nouă (descriere)', insert: (t) => update({ activities: [...r.activities, { id: newId(), description: t, quantity: null, unit: 'm', location: '' }] }) },
-    { label: 'Probleme, întârzieri și cauze', insert: (t) => update({ problems: append(r.problems, t) }) },
-    { label: 'Instrucțiuni primite', insert: (t) => update({ instructions: append(r.instructions, t) }) },
-    { label: 'Vizite pe șantier', insert: (t) => update({ visits: append(r.visits, t) }) },
-    { label: 'Evenimente SSM', insert: (t) => update({ safety: append(r.safety, t) }) },
-    { label: 'Observații', insert: (t) => update({ notes: append(r.notes, t) }) },
+    ...rowTarget('activities', 'description', 'Activitatea – descriere'),
+    ...rowTarget('activities', 'location', 'Activitatea – locație / tronson'),
+    ...rowTarget('materials', 'name', 'Materialul – denumire'),
+    ...rowTarget('materials', 'document', 'Materialul – aviz / factură'),
+    ...rowTarget('equipment', 'name', 'Utilajul – denumire'),
+    ...rowTarget('personnel', 'category', 'Personal – categoria'),
+    { label: 'Probleme, întârzieri și cauze', insert: appendTo('problems') },
+    { label: 'Instrucțiuni primite', insert: appendTo('instructions') },
+    { label: 'Instrucțiuni primite de la', insert: appendTo('instructionsFrom') },
+    { label: 'Vizite pe șantier', insert: appendTo('visits') },
+    { label: 'Evenimente SSM', insert: appendTo('safety') },
+    { label: 'Observații', insert: appendTo('notes') },
   ]
 
   const makePdf = async () => {
     setPdfBusy(true)
     try {
-      await flush()
+      await ensureSaved()
       const { dailyReportPdf } = await import('../lib/pdf')
       const { blob, filename } = await dailyReportPdf(r.id)
       const res = await shareOrDownload(blob, filename, `Raport zilnic ${projectName}`)
@@ -209,7 +246,7 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
               </div>
             )}
           />
-          {!locked && <CopyPrevious reportId={r.id} onCopied={async () => setValue((await db.reports.get(r.id)) ?? r)} flush={flush} />}
+          {!locked && <CopyPrevious reportId={r.id} onCopied={async () => setValue((await db.reports.get(r.id)) ?? r)} flush={ensureSaved} />}
         </Section>
 
         <Section title="Utilaje" count={r.equipment.length}>
@@ -299,11 +336,11 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
       </fieldset>
 
       <Section title="Fotografii" defaultOpen id="foto">
-        <PhotoSection ref={photoRef} projectId={r.projectId} ownerType="report" ownerId={r.id} role="general" disabled={locked} />
+        <PhotoSection ref={photoRef} projectId={r.projectId} ownerType="report" ownerId={r.id} role="general" disabled={locked} beforeAdd={ensureSaved} />
       </Section>
 
       <Section title="Note vocale" id="voce">
-        <VoiceNotes projectId={r.projectId} ownerType="report" ownerId={r.id} disabled={locked} targets={targets} />
+        <VoiceNotes projectId={r.projectId} ownerType="report" ownerId={r.id} disabled={locked} targets={targets} beforeAdd={ensureSaved} />
       </Section>
 
       <div className="stack" style={{ marginTop: 16 }}>
@@ -314,7 +351,7 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
           <button
             className="btn primary big block"
             onClick={async () => {
-              await flush()
+              await ensureSaved()
               if (
                 !(await confirmDialog({
                   title: 'Finalizezi raportul?',
@@ -331,9 +368,15 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
             <IconCheck /> Finalizează raportul
           </button>
         )}
+        {!locked && (
         <button
           className="btn danger block"
           onClick={async () => {
+            await flush()
+            if (!(await db.reports.get(r.id))) {
+              toast('Raportul acestei zile nu a fost încă completat, deci nu există nimic de șters.')
+              return
+            }
             if (!(await confirmDialog({ title: 'Ștergi raportul?', message: 'Raportul și fotografiile lui ajung în Coș 30 de zile.', confirmLabel: 'Șterge', danger: true }))) return
             await flush()
             await softDelete('reports', r.id)
@@ -343,6 +386,7 @@ function ReportEditor({ initial, projectName }: { initial: DailyReport; projectN
         >
           <IconTrash /> Șterge raportul
         </button>
+        )}
       </div>
     </Layout>
   )
