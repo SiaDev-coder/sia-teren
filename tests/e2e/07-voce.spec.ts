@@ -123,3 +123,12 @@ test('E2E 6: model vocal descărcat online, apoi OFFLINE transcrie un fișier au
   await openSection(page, 'Vizite, SSM, observații')
   await expect(page.getByLabel('Observații')).toHaveValue(text)
 })
+
+test('fără acces la huggingface.co: „Descarcă” afișează un mesaj clar, nimic nu se blochează', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'un singur browser e suficient pentru mesaj')
+  test.skip(await hfReachable(), 'huggingface.co este accesibil — se verifică descărcarea reală în E2E 6')
+  await page.goto('./#/setari')
+  await page.getByRole('button', { name: 'Descarcă pentru folosire offline' }).first().click()
+  await expect(page.getByText(/Nu se poate afla mărimea modelului/)).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Descarcă pentru folosire offline' }).first()).toBeEnabled()
+})

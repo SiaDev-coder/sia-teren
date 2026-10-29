@@ -83,8 +83,15 @@ async function setupOrt(device: AsrDevice, base: string, allowNetwork: boolean, 
   const gzRes = await cachedFetch(new URL(f.wasmGz, base).href, allowNetwork, (n) => {
     if (reqId !== undefined) post({ type: 'progress', reqId, loaded: f.mjsBytes + n, total, phase: 'runtime' })
   })
-  const stream = (await gzRes.blob()).stream().pipeThrough(new DecompressionStream('gzip'))
-  const wasmBinary = await new Response(stream).arrayBuffer()
+  const raw = new Uint8Array(await gzRes.arrayBuffer())
+  // Fișierul e livrat comprimat gzip; unele servere îl decomprimă singure în drum (Content-Encoding),
+  // de aceea verificăm semnătura: 1f 8b = gzip, 00 61 73 6d = WebAssembly deja decomprimat.
+  let wasmBinary: ArrayBuffer
+  if (raw[0] === 0x1f && raw[1] === 0x8b) {
+    wasmBinary = await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+  } else if (raw[0] === 0x00 && raw[1] === 0x61 && raw[2] === 0x73 && raw[3] === 0x6d) {
+    wasmBinary = raw.buffer
+  } else throw new Error('Fișierul motorului de transcriere este deteriorat.')
   const wasm = t.env.backends.onnx.wasm!
   if (factoryUrl) URL.revokeObjectURL(factoryUrl)
   factoryUrl = URL.createObjectURL(new Blob([mjsText], { type: 'text/javascript' }))

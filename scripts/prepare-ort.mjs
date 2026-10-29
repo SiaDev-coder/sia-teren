@@ -21,11 +21,11 @@ const variants = ['ort-wasm-simd-threaded', 'ort-wasm-simd-threaded.asyncify']
 const manifest = { version: ortVersion, files: {} }
 for (const v of variants) {
   const src = resolve(ortDir, 'dist', `${v}.wasm`)
-  const gz = resolve(out, `${v}.wasm.gz`)
+  const gz = resolve(out, `${v}.wasm.gzdata`)
   await pipeline(createReadStream(src), createGzip({ level: 9 }), createWriteStream(gz))
   copyFileSync(resolve(ortDir, 'dist', `${v}.mjs`), resolve(out, `${v}.mjs`))
   manifest.files[v] = {
-    wasmGz: `${ortVersion}/${v}.wasm.gz`,
+    wasmGz: `${ortVersion}/${v}.wasm.gzdata`,
     mjs: `${ortVersion}/${v}.mjs`,
     wasmGzBytes: statSync(gz).size,
     mjsBytes: statSync(resolve(out, `${v}.mjs`)).size,

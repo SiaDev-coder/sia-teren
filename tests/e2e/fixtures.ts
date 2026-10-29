@@ -45,6 +45,7 @@ interface Fixtures {
  * deci și o origine separată (IndexedDB curat). Pe un URL public (E2E_BASE_URL) se folosește acela.
  */
 export const test = base.extend<Fixtures & { server: { url: string; proc: ChildProcess | null } }>({
+  // eslint-disable-next-line no-empty-pattern -- forma cerută de Playwright pentru fixture fără dependențe
   server: async ({}, use) => {
     if (process.env.E2E_BASE_URL) {
       await use({ url: process.env.E2E_BASE_URL, proc: null })
