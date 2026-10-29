@@ -45,6 +45,33 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets }:
   const [rec, setRec] = useState<{ mr: MediaRecorder; started: number; stream: MediaStream } | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const chunks = useRef<Blob[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const importFile = async (f: File | undefined) => {
+    if (!f) return
+    if (!f.type.startsWith('audio/') && !/\.(m4a|mp3|wav|ogg|opus|webm|aac)$/i.test(f.name)) {
+      toast('Fișierul ales nu este audio.', 'error')
+      return
+    }
+    // durata din metadatele fișierului (dacă browserul o poate citi)
+    const durationSec = await new Promise<number>((res) => {
+      const a = document.createElement('audio')
+      const u = URL.createObjectURL(f)
+      a.preload = 'metadata'
+      a.onloadedmetadata = () => {
+        URL.revokeObjectURL(u)
+        res(Number.isFinite(a.duration) ? Math.round(a.duration * 10) / 10 : 0)
+      }
+      a.onerror = () => {
+        URL.revokeObjectURL(u)
+        res(0)
+      }
+      a.src = u
+    })
+    const note = await addAudio({ projectId, ownerType, ownerId, blob: f, mimeType: f.type || 'audio/mp4', durationSec })
+    toast('Fișierul audio a fost atașat.', 'ok')
+    if (await readyModel()) void runTranscription(note)
+  }
 
   useEffect(() => {
     if (!rec) return
@@ -111,9 +138,25 @@ export function VoiceNotes({ projectId, ownerType, ownerId, disabled, targets }:
             <span className="rec-dot" aria-hidden="true" /> <IconStop /> Oprește înregistrarea ({elapsed} s)
           </button>
         ) : (
-          <button type="button" className="btn" onClick={start}>
-            <IconMic /> Înregistrează notă vocală
-          </button>
+          <>
+            <button type="button" className="btn" onClick={start}>
+              <IconMic /> Înregistrează notă vocală
+            </button>
+            <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
+              Atașează fișier audio (ex. mesaj vocal)
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="audio/*,.m4a,.mp3,.wav,.ogg,.opus"
+              hidden
+              data-testid="audio-input"
+              onChange={(e) => {
+                void importFile(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+          </>
         ))}
       {!model && <p className="muted small">Pentru transcriere automată în text, descarcă modelul vocal din Mai mult → Setări → Model vocal.</p>}
     </div>

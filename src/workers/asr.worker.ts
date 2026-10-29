@@ -5,6 +5,9 @@ import { MODEL_IDS, ORT_CACHE, dtypeFor, ortVariant, type AsrDevice, type AsrMod
 
 declare const self: DedicatedWorkerGlobalScope
 
+/** Model ONNX de 67 de octeți (opset 13): y = x + x, x: float32[4]. Generat cu pachetul Python `onnx`. */
+const SELFTEST_MODEL = 'CAg6OQoOCgF4CgF4EgF5IgNBZGQSBWR1Ymx1Wg8KAXgSCgoICAESBAoCCARiDwoBeRIKCggIARIECgIIBEIECgAQDQ=='
+
 type Transformers = typeof import('@huggingface/transformers')
 let tf: Transformers | null = null
 async function lib(): Promise<Transformers> {
@@ -175,6 +178,19 @@ async function handle(req: AsrRequest) {
       }
       return r
     }
+    case 'selftest': {
+      // Verifică motorul ONNX Runtime (WASM servit de aplicație, din cache dacă nu e rețea)
+      // cu un model ONNX minuscul: y = x + x.
+      await setupOrt(req.device, req.ortBase, true)
+      const ort = await import('onnxruntime-web/webgpu')
+      const model = Uint8Array.from(atob(SELFTEST_MODEL), (c) => c.charCodeAt(0))
+      const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] })
+      const out = await session.run({ x: new ort.Tensor('float32', new Float32Array([1, 2, 3, 4]), [4]) })
+      const y = Array.from(out.y.data as Float32Array)
+      await session.release()
+      if (y.join(',') !== '2,4,6,8') throw new Error(`rezultat greșit (${y.join(',')})`)
+      return { ok: true, variant: ortVariant(req.device), output: y }
+    }
     case 'transcribe': {
       await setupOrt(req.device, req.ortBase, true)
       const asr = await loadPipeline(req.model, req.device)
@@ -198,7 +214,7 @@ self.onmessage = async (ev: MessageEvent<AsrRequest>) => {
     post({ type: 'result', reqId: req.reqId, data })
   } catch (e) {
     console.error('[asr]', e)
-    post({ type: 'error', reqId: req.reqId, message: req.type === 'info' ? infoError(e) : friendly(e) })
+    post({ type: 'error', reqId: req.reqId, message: req.type === 'info' ? infoError(e) : req.type === 'selftest' ? selftestError(e) : friendly(e) })
   }
 }
 
@@ -206,4 +222,11 @@ function infoError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
   if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) return 'Nu se poate afla mărimea modelului: nu există conexiune la huggingface.co.'
   return `Nu se poate afla mărimea modelului: ${msg}`
+}
+
+function selftestError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  if (msg === 'OFFLINE_MISSING' || /Failed to fetch|NetworkError|Load failed/i.test(msg))
+    return 'Motorul de transcriere nu este încă pe telefon. Conectează-te o dată la internet și apasă din nou (sau descarcă modelul vocal).'
+  return `Motorul de transcriere nu poate rula pe acest dispozitiv: ${msg}`
 }

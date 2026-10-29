@@ -7,7 +7,7 @@ import { processLogo } from '../lib/photo'
 import { requestPersist, storageInfo, type StorageInfo } from '../lib/storage'
 import { formatBytes } from '../lib/format'
 import { MODEL_LABELS, type AsrDevice, type AsrModel } from '../lib/asr-protocol'
-import { defaultModel, deleteModel, detectDevice, downloadModel, isModelCached, modelInfo, type Progress } from '../lib/asr'
+import { defaultModel, deleteModel, detectDevice, downloadModel, isModelCached, modelInfo, selfTest, type Progress } from '../lib/asr'
 
 export function SettingsScreen() {
   const s = useSettings()
@@ -138,6 +138,7 @@ function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready:
   const [cached, setCached] = useState<Partial<Record<AsrModel, boolean>>>({})
   const [progress, setProgress] = useState<Progress | null>(null)
   const [busy, setBusy] = useState<AsrModel | null>(null)
+  const [check, setCheck] = useState<{ running: boolean; text: string; ok: boolean } | null>(null)
   const current = chosen ?? def
 
   useEffect(() => {
@@ -249,6 +250,36 @@ function VoiceModelSettings({ chosen, ready }: { chosen: AsrModel | null; ready:
             </div>
           )
         })}
+      <div className="card stack">
+        <strong>Verificare motor de transcriere</strong>
+        <p className="small muted" style={{ margin: 0 }}>
+          Testează pe acest telefon decodarea audio (16 kHz) și motorul ONNX Runtime. Merge și fără internet, după prima pregătire.
+        </p>
+        <button
+          className="btn block"
+          disabled={check?.running}
+          onClick={async () => {
+            setCheck({ running: true, text: 'Se verifică…', ok: false })
+            try {
+              const r = await selfTest()
+              setCheck({
+                running: false,
+                ok: true,
+                text: `Motorul de transcriere funcționează pe acest telefon (${r.device === 'webgpu' ? 'WebGPU' : 'WASM'}); audio reeșantionat corect la 16 kHz (${r.samples16k} eșantioane/s).`,
+              })
+            } catch (e) {
+              setCheck({ running: false, ok: false, text: errorMessage(e) })
+            }
+          }}
+        >
+          Verifică motorul de transcriere
+        </button>
+        {check && !check.running && (
+          <p className="small" role="status" data-testid="selftest-result" style={{ margin: 0, color: check.ok ? 'var(--ok)' : 'var(--danger)' }}>
+            {check.text}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

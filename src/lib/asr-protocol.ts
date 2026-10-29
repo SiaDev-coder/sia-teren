@@ -30,6 +30,7 @@ export type AsrRequest =
   | { type: 'download'; reqId: number; model: AsrModel; device: AsrDevice; ortBase: string }
   | { type: 'delete'; reqId: number; model: AsrModel; device: AsrDevice; ortBase: string; keepOrt: boolean }
   | { type: 'transcribe'; reqId: number; model: AsrModel; device: AsrDevice; ortBase: string; audio: Float32Array }
+  | { type: 'selftest'; reqId: number; device: AsrDevice; ortBase: string; model: AsrModel }
 
 export type AsrResponse =
   | { type: 'result'; reqId: number; data: unknown }

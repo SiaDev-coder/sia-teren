@@ -38,7 +38,11 @@ function getWorker(): Worker {
 
 type DistOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never
 
-function call<T>(req: DistOmit<AsrRequest, 'reqId' | 'ortBase'>, onProgress?: (p: Progress) => void, transfer: Transferable[] = []): Promise<T> {
+function call<T>(
+  req: DistOmit<AsrRequest, 'reqId' | 'ortBase'>,
+  onProgress?: (p: Progress) => void,
+  transfer: Transferable[] = [],
+): Promise<T> {
   const reqId = ++seq
   const ortBase = new URL('ort/', document.baseURI).href
   return new Promise<T>((resolve, reject) => {
@@ -125,4 +129,45 @@ export async function transcribe(blob: Blob): Promise<string> {
   }
   const r = await call<{ text: string }>({ type: 'transcribe', model: ready.model, device: ready.device, audio }, undefined, [audio.buffer])
   return r.text
+}
+
+/** Ton de 1 s (440 Hz) ca fișier WAV generat în memorie, pentru verificarea lanțului audio. */
+function testWav(sampleRate = 44100): Blob {
+  const n = sampleRate
+  const buf = new ArrayBuffer(44 + n * 2)
+  const v = new DataView(buf)
+  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)))
+  str(0, 'RIFF')
+  v.setUint32(4, 36 + n * 2, true)
+  str(8, 'WAVE')
+  str(12, 'fmt ')
+  v.setUint32(16, 16, true)
+  v.setUint16(20, 1, true)
+  v.setUint16(22, 1, true)
+  v.setUint32(24, sampleRate, true)
+  v.setUint32(28, sampleRate * 2, true)
+  v.setUint16(32, 2, true)
+  v.setUint16(34, 16, true)
+  str(36, 'data')
+  v.setUint32(40, n * 2, true)
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round(Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 12000), true)
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
+export interface SelfTestResult {
+  device: AsrDevice
+  variant: string
+  samples16k: number
+}
+
+/**
+ * Verificare reală a motorului de transcriere pe acest dispozitiv: decodare + reeșantionare la 16 kHz
+ * și rularea ONNX Runtime (binarul WASM servit de aplicație / din cache) pe un model minuscul.
+ */
+export async function selfTest(): Promise<SelfTestResult> {
+  const device = await detectDevice()
+  const audio = await decodeTo16kMono(testWav())
+  if (Math.abs(audio.length - 16000) > 2) throw new Error(`Reeșantionarea audio a dat ${audio.length} eșantioane în loc de 16000.`)
+  const r = await call<{ variant: string }>({ type: 'selftest', device, model: 'base' })
+  return { device, variant: r.variant, samples16k: audio.length }
 }
