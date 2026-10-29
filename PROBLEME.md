@@ -10,3 +10,5 @@ Format: problemă — cauză — rezolvare.
 6. **Ecranul Setări interoga huggingface.co la deschidere** (pentru mărimea modelului) — contravine regulii „singura cerere de rețea: descărcarea explicită”. Mutat în fluxul butonului „Descarcă”.
 7. **`waitForFunction` cu funcție async** întorcea imediat (Promise = valoare „adevărată”) → testul reîncărca înainte ca service worker-ul să fie activ. Înlocuit cu `navigator.serviceWorker.ready`.
 8. **Săgeata „→” apărea ca „?” în PDF** — Noto Sans nu are glifa U+2192. Adăugată tabelă de înlocuitori (→ devine „->”, emoji eliminate) + test unitar.
+9. **Chromium (Playwright) nu încărca fișiere din căi cu diacritice** (dosarul de rezultate al testului conținea „fără”) — evenimentul `change` venea cu listă goală. Testele folosesc acum căi ASCII în `/tmp`. Pe telefon numele fișierelor alese de utilizator nu sunt afectate (browserul primește fișierul, nu calea).
+10. **Cursă în test**: după „Șterge proiectul” aplicația navighează la Proiecte; testul naviga la Coș înainte → ajungea înapoi pe Proiecte. Testul așteaptă acum confirmarea.
