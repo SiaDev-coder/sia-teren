@@ -99,12 +99,14 @@ test('E2E 6: model vocal descărcat online, apoi OFFLINE transcrie un fișier au
   await page.goto('./')
   await waitForServiceWorker(page)
   await page.goto('./#/setari')
-  await page.getByLabel('Model', { exact: true }).selectOption('base')
+  // implicit „base” (mai mic, mai rapid); E2E_ASR_MODEL=small măsoară modelul recomandat pentru română
+  const model = process.env.E2E_ASR_MODEL === 'small' ? 'small' : 'base'
+  await page.locator('select[name="voiceModel"]').selectOption(model)
   await page.getByRole('button', { name: 'Descarcă pentru folosire offline' }).click()
   await expect(page.getByTestId('model-size')).toContainText('MB', { timeout: 60_000 })
   await page.getByRole('dialog').getByRole('button', { name: 'Descarcă' }).click()
   await expect(page.getByText('Modelul vocal a fost descărcat.')).toBeVisible({ timeout: 25 * 60_000 })
-  await expect(page.getByTestId('model-base')).toContainText('descărcat')
+  await expect(page.getByTestId(`model-${model}`)).toContainText('descărcat')
 
   await goOffline()
   await page.reload()

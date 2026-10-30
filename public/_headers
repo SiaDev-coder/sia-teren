@@ -1,3 +1,7 @@
+# Fără Referer pe toate resursele (pagina și worker-ul de transcriere): huggingface.co răspunde 404
+# cererilor care vin cu Referer de pe *.workers.dev, deci descărcarea modelului vocal ar eșua.
+/*
+  Referrer-Policy: no-referrer
 /sw.js
   Cache-Control: no-cache
 /index.html

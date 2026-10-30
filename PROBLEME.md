@@ -14,7 +14,14 @@ Format: problemă — cauză — rezolvare.
 10. **Cursă în test**: după „Șterge proiectul” aplicația navighează la Proiecte; testul naviga la Coș înainte → ajungea înapoi pe Proiecte. Testul așteaptă acum confirmarea.
 11. **Sesiunea s-a repornit (cod 137) la rularea testelor de voce cu 3 browsere în paralel** — testele de voce rulează cu `--workers=1`.
 12. **`Content-Encoding: gzip` adăugat automat de server pentru `*.wasm.gz`** → redenumit `*.wasm.gzdata` + detecție după semnătură.
-13. **E2E 6 nu poate rula aici**: huggingface.co blocat (403 la proxy). Testul există complet (descărcare → offline → transcriere fișier român → inserare în câmp) și se sare automat cu motivul afișat; rulează când mediul are acces.
+13. **E2E 6 nu putea rula în prima sesiune**: huggingface.co blocat (403 la proxy). Rezolvat la publicare (rețea „Full”) — vezi mai jos.
+
+## Publicarea pe Cloudflare (30.10.2026)
+14. **Rețeaua mediului rămăsese „Limited”** deși variabilele Cloudflare erau puse — api.cloudflare.com și huggingface.co refuzate de proxy (verificat și dintr-o sesiune nouă). După trecerea pe „Full”: `wrangler whoami` OK, `npm run deploy` → https://sia-teren.officesoftgest.workers.dev.
+15. **(Reală, ar fi afectat telefoanele) Modelul vocal nu se putea descărca de pe linkul public**: huggingface.co (CloudFront) răspunde **404 oricărei cereri cu antet Referer de pe `*.workers.dev`** (verificat cu curl: același URL → 200 fără Referer sau cu Referer de pe alt domeniu, 404 cu Referer `*.workers.dev`). Browserul vedea asta ca eroare CORS → „Nu se poate afla mărimea modelului”. Local (127.0.0.1) nu apărea. Reparat: `Referrer-Policy: no-referrer` în `public/_headers` (pagina și worker-ul de transcriere) + `<meta name="referrer" content="no-referrer">`. Test nou de regresie în `01-shell-offline.spec.ts` (pică pe versiunea veche, trece pe cea nouă).
+16. **E2E 6 avea o greșeală de test** (nu rulase niciodată): `getByLabel('Model', { exact: true })` nu găsea lista, pentru că numele accesibil al listei include și opțiunea aleasă. Înlocuit cu `select[name="voiceModel"]`.
+17. **Testul offline pe URL public în WebKit**: `context.setOffline()` din Playwright strică reîncărcarea în WebKit (limitare cunoscută). Pentru URL public, testele trec acum tot traficul browserului printr-un proxy local care, la „fără rețea”, închide conexiunile — rețeaua dispare cu adevărat pentru pagină și service worker, pe ambele browsere (verificat: după tăiere, cererile spre aplicație și spre huggingface.co eșuează).
+18. **`fetch` din Node nu folosea proxy-ul mediului** (ENOTFOUND în testele care verifică din Node) — testele pe URL public se rulează cu `NODE_USE_ENV_PROXY=1`.
 
 ## Verificarea independentă — runda 1 (23 de constatări) și reparații
 - **V-01 (critică) pierdere la reîncărcare sub 250 ms** — salvarea automată scrie acum imediat întreaga înregistrare la fiecare modificare (`useAutosave` + `saveReport`/`saveFinding`, o singură tranzacție). Test: reîncărcare imediată după tastare și după rând nou (`02-flux-complet.spec.ts`).

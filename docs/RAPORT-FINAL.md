@@ -1,13 +1,15 @@
-# Raport final — SIA Teren v1
+# Raport final — SIA Teren v1 (publicat)
 
 ## 1. Linkuri și instalare
 
-- **Aplicația (link public): încă nu există.** Găzduirea pe Cloudflare nu s-a putut face din această sesiune (vezi punctul 5). Totul e pregătit; după pasul tău, publicarea durează câteva minute.
-- **Pull Request:** https://github.com/SiaDev-coder/sia-teren/pull/1 (ramura `claude/meta-prompt-sia-teren-1hioo5` → `main`).
+- **Aplicația: https://sia-teren.officesoftgest.workers.dev** (Cloudflare Workers, HTTPS, publicată pe 30.10.2026 cu `npm run deploy`).
+- Cod: https://github.com/SiaDev-coder/sia-teren — PR #1 îmbinat în `main`; reparațiile de la publicare sunt în PR-ul nou de pe ramura `claude/meta-prompt-sia-teren-1hioo5`.
 
-**Android (Chrome)** — 1) deschizi linkul aplicației în Chrome; 2) apeși „Instalează” (sau meniul ⋮ → „Instalează aplicația”); 3) pornești din iconița SIA Teren.
+**Android (Chrome)** — 1) deschizi linkul în Chrome; 2) apeși „Instalează” (sau meniul ⋮ → „Instalează aplicația”); 3) pornești din iconița SIA Teren.
 
 **iPhone (Safari)** — 1) deschizi linkul în Safari; 2) Partajare (pătratul cu săgeată) → „Adaugă pe ecranul principal” → „Adaugă”; 3) pornești din iconița SIA Teren (așa Safari nu șterge datele).
+
+**Pentru notele vocale**, o singură dată, pe Wi-Fi: Mai mult → Setări → Model vocal → „Descarcă pentru folosire offline”.
 
 ## 2. Ce face (pe scurt)
 
@@ -19,24 +21,27 @@
 
 ## 3. Ce am verificat și cum
 
-- Build fără erori, verificare de cod (ESLint) curată, TypeScript strict.
-- 34 de teste automate pe logică (bază de date, Coș, copie → restaurare identică, fișiere stricate, CSV, PDF cu „ȘȚĂÎÂ șțăîâ” citit corect înapoi, sunet la 16 kHz).
-- 42 de teste automate în browser pe profil de telefon Android (Chrome) și iPhone (Safari/WebKit), pe versiunea finală: flux complet până la PDF, constatări, **mod avion** (reîncărcare + date noi + PDF fără rețea), date păstrate după închiderea browserului, copie → ștergere totală → restaurare identică, export, 1.000 de rapoarte + 300 constatări fluide, butoane de minimum 48 px, contrast bun la soare.
-- Un verificator independent (alt agent, fără să știe ce am făcut) a încercat să strice aplicația în 4 runde; a găsit inițial 2 probleme critice și 6 majore, toate reparate. Ultima rundă: **0 critice, 0 majore**. Rapoartele sunt în `docs/verificare/`.
-- Licențe: toate componentele sunt cu licențe libere permisive; lista e în aplicație la „Despre”.
+- Build fără erori, ESLint curat, TypeScript strict; JS inițial 138,3 KB gzip (limită 400 KB).
+- **34 de teste unitare** — toate trec.
+- **Toată suita E2E rulată pe linkul public**, profil Android (Chromium, Pixel 7) și iPhone (WebKit, iPhone 15): **45 trecute, 0 picate, 5 sărite intenționat** (2 teste „fără acces la huggingface.co” — acum accesul există; 3 teste doar-Chromium: microfon simulat, microfon refuzat, regresia V-08). Aceeași suită local (`vite preview`): toate trec, aceleași 5 sărite.
+- **E2E 3 (offline) pe linkul public**: aplicația se încarcă o dată, rețeaua se taie de tot (proxy local închis — verificat că și cererile spre aplicație și spre internet eșuează), reîncărcare, proiect + raport + PDF fără rețea — trece pe Chromium și WebKit.
+- **E2E 6 (voce) pe linkul public**: modelul „base” descărcat real de pe huggingface.co, rețeaua tăiată, fișier audio în română transcris pe telefon și inserat cu o atingere în „Observații” — trece pe Chromium și WebKit. Text de referință (voce sintetică eSpeak): „Astăzi am turnat betonul la căminul doisprezece. Lucrările de săpătură continuă mâine pe strada Școlii.”
+  - „base”, Chromium: „Asta zi-am tu la pe toal la caminul de ois prene ce. Lui care vile de săr-a paturat continuă mine pe strata școlii.”
+  - „small”, Chromium: „Asta-zi am tu n-at pe tonul la caminul dois prezece. Lucrările de Săpatura continuăm în epe strada școlii.”
+- **Problemă reală găsită și reparată la publicare**: huggingface.co răspunde 404 cererilor care vin cu Referer de pe `*.workers.dev` — pe telefoane, descărcarea modelului vocal ar fi eșuat cu „Nu se poate afla mărimea modelului”. Aplicația nu mai trimite Referer (`Referrer-Policy: no-referrer`); test de regresie nou. Detalii: `PROBLEME.md` 14–18.
+- Verificatorul independent (4 runde, prima sesiune): ultima rundă **0 critice, 0 majore** (`docs/verificare/`).
+- Licențe: toate permisive; lista în aplicație la „Despre” și în `THIRD-PARTY-LICENSES.md`.
 
 ## 4. Limitări reale
 
-- **Transcrierea vocală nu a putut fi testată cap-coadă aici**: serverul modelelor (huggingface.co) e blocat în acest mediu. Am dovedit doar partea de pe telefon (motorul rulează fără internet, sunetul e pregătit corect). Testul complet e scris și va rula după pasul de mai jos.
-- Modelul vocal are zeci-sute de MB (mărimea exactă îți e arătată înainte de descărcare); „small” e mai bun la română, „base” mai rapid.
-- Telefoanele fără WebGPU transcriu mai lent (pe procesor).
+- **Calitatea transcrierii**: pe vocea sintetică de test, „base” prinde ideea aproximativ, „small” e vizibil mai bun. Pe voce reală e de așteptat mai bine, dar textul trebuie recitit; pentru română alege „small” dacă telefonul are loc și Wi-Fi.
+- Modelul vocal are zeci–sute de MB (mărimea exactă e arătată înainte de descărcare). Telefoanele fără WebGPU transcriu mai lent (pe procesor).
+- Testele de telefon sunt făcute pe profile mobile simulate (Pixel 7 / iPhone 15 în Chromium și WebKit), nu pe telefoane fizice.
 - Datele stau doar pe telefon: fără copie de siguranță, pierderea telefonului înseamnă pierderea datelor.
-- Dacă aceeași zi e deschisă simultan în două ferestre și în ambele se adaugă rânduri de personal/utilaje, rămâne lista ultimei ferestre (caz rar).
-- Am acceptat licența permisivă Zlib (folosită de biblioteca PDF), care nu era în lista din cerințe — detalii în `DECIZII.md`.
+- Aceeași zi deschisă simultan în două ferestre, cu rânduri de personal/utilaje adăugate în ambele: rămâne lista ultimei ferestre (caz rar, R-06).
+- Licența Zlib (biblioteca PDF) acceptată ca permisivă — `DECIZII.md`.
+- Adresa e pe subdomeniul gratuit `workers.dev`; un domeniu propriu se poate adăuga oricând din Cloudflare, fără schimbări în aplicație.
 
-## 5. Singurul pas care îți rămâne
+## 5. Ce îți rămâne
 
-În Claude Code (claude.ai/code), la mediul acestei sesiuni — meniul mediului din bara de titlu → **Edit**:
-1. **Network access**: alege **Full** (sau adaugă la domenii permise: `huggingface.co`, `*.huggingface.co`, `*.hf.co`, `api.cloudflare.com`, `*.workers.dev`, lăsând bifată lista implicită).
-2. **Variabile de mediu**: `CLOUDFLARE_API_TOKEN` și `CLOUDFLARE_ACCOUNT_ID`. Tokenul îl creezi în Cloudflare → My Profile → API Tokens → Create Token → șablonul **„Edit Cloudflare Workers”**; Account ID îl găsești în Cloudflare, pe pagina contului (Workers & Pages, în dreapta). Nu le scrie în chat.
-3. Pornește o sesiune nouă și scrie: „publică SIA Teren pe Cloudflare și rulează E2E 3 și E2E 6”. Atunci se face publicarea (`npm run deploy`), primești linkul HTTPS și se rulează testul offline pe linkul public și testul de transcriere.
+Nimic obligatoriu. Opțional: după ce ești mulțumit, poți face „Roll” la tokenul Cloudflare (apare în istoricul unei conversații) și pui valoarea nouă în variabila de mediu.
