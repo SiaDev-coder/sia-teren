@@ -38,3 +38,17 @@ test('manifest PWA complet și instalabil', async ({ page, request }) => {
     expect(r.headers()['content-type']).toContain('image/png')
   }
 })
+
+test('cererile către alte site-uri pleacă fără Referer (huggingface.co refuză Referer de pe *.workers.dev)', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'no-referrer')
+  // o cerere reală spre altă origine, din pagină: antetul Referer nu trebuie să existe
+  const seen = page.waitForRequest((r) => r.url().startsWith('https://sia-referer-test.invalid/'))
+  await page.evaluate(() => fetch('https://sia-referer-test.invalid/x', { mode: 'no-cors' }).catch(() => null))
+  expect((await seen).headers()['referer'] ?? '').toBe('')
+  // pe un URL public, și antetul HTTP trebuie să vină de la server (se aplică și worker-ului de transcriere)
+  if (process.env.E2E_BASE_URL) {
+    const res = await page.request.get(page.url())
+    expect(res.headers()['referrer-policy']).toBe('no-referrer')
+  }
+})

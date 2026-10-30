@@ -14,7 +14,9 @@
 
 ## Instalare pe telefon
 
-Aplicația se deschide dintr-o adresă de internet (link) și apoi se „instalează” pe ecranul principal. După instalare pornește din iconiță, ca orice aplicație.
+**Linkul aplicației: https://sia-teren.officesoftgest.workers.dev**
+
+Aplicația se deschide din acest link și apoi se „instalează” pe ecranul principal. După instalare pornește din iconiță, ca orice aplicație.
 
 **Android (Chrome)**
 1. Deschide linkul aplicației în **Chrome**.
@@ -59,4 +61,5 @@ Vezi [GHID-UTILIZARE.md](GHID-UTILIZARE.md) — cu imagini din aplicație.
 - Cerințele complete: [`docs/META-PROMPT.md`](docs/META-PROMPT.md); deciziile: [`DECIZII.md`](DECIZII.md); stadiul: [`PROGRES.md`](PROGRES.md); probleme rezolvate: [`PROBLEME.md`](PROBLEME.md).
 - Node 22: `npm ci` · `npm run dev` · `npm test` (unitare) · `npm run build && npx playwright test` (E2E) · `npm run lint`.
 - Livrare: `npm run release` (build + verificare licențe + `THIRD-PARTY-LICENSES.md` + buget JS ≤ 400 KB gzip) · `npm run deploy` (Cloudflare, cu `CLOUDFLARE_API_TOKEN` și `CLOUDFLARE_ACCOUNT_ID` în mediu).
+- Teste pe linkul public: `NODE_USE_ENV_PROXY=1 E2E_BASE_URL=https://sia-teren.officesoftgest.workers.dev/ npx playwright test tests/e2e/04-offline-persistenta.spec.ts tests/e2e/07-voce.spec.ts` (fără rețea = proxy local tăiat; `E2E_ASR_MODEL=small` pentru modelul „small” în E2E 6).
 - Stack: Vite + React + TypeScript, vite-plugin-pwa (Workbox), Dexie (IndexedDB), pdf-lib + fontkit (Noto Sans OFL), fflate, Transformers.js (Whisper) cu ONNX Runtime Web servit din aplicație.
