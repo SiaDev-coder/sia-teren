@@ -3,7 +3,7 @@
 ## 1. Linkuri și instalare
 
 - **Aplicația: https://sia-teren.officesoftgest.workers.dev** (Cloudflare Workers, HTTPS, publicată pe 30.10.2026 cu `npm run deploy`).
-- Cod: https://github.com/SiaDev-coder/sia-teren — PR #1 îmbinat în `main`; reparațiile de la publicare sunt în PR-ul nou de pe ramura `claude/meta-prompt-sia-teren-1hioo5`.
+- Cod: https://github.com/SiaDev-coder/sia-teren — PR #1 îmbinat în `main`; reparațiile de la publicare: PR #2 (https://github.com/SiaDev-coder/sia-teren/pull/2).
 
 **Android (Chrome)** — 1) deschizi linkul în Chrome; 2) apeși „Instalează” (sau meniul ⋮ → „Instalează aplicația”); 3) pornești din iconița SIA Teren.
 
